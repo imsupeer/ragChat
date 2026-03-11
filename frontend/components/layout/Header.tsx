@@ -1,11 +1,12 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Cpu, Files } from 'lucide-react';
+import { Cpu, Gpu, Files } from 'lucide-react';
 
 export function Header({ documentCount }: { documentCount: number }) {
-  const fallbackStatus = process.env.NEXT_PUBLIC_MODEL_STATUS ?? 'Ollama running';
-  const [status, setStatus] = useState(fallbackStatus);
+  const fallbackStatus = '';
+  const [backendStatus, setBackendStatus] = useState(fallbackStatus);
+  const [ollamaStatus, setOllamaStatus] = useState(fallbackStatus);
 
   useEffect(() => {
     const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000';
@@ -15,8 +16,26 @@ export function Header({ documentCount }: { documentCount: number }) {
         if (!res.ok) throw new Error('Backend offline');
         return res.json();
       })
-      .then(() => setStatus('Backend online'))
-      .catch(() => setStatus('Backend offline'));
+      .then(() => setBackendStatus('Backend online'))
+      .catch(() => setBackendStatus('Backend offline'));
+  }, []);
+
+  useEffect(() => {
+    const ollamaUrl = process.env.NEXT_PUBLIC_OLLAMA_URL ?? 'http://localhost:11434';
+
+    fetch(`${ollamaUrl}/api/tags`, { cache: 'no-store' })
+      .then((res) => {
+        if (!res.ok) throw new Error('Ollama offline');
+        return res.json();
+      })
+      .then((data) => {
+        if (data.models?.length > 0) {
+          setOllamaStatus('Ollama ready');
+        } else {
+          setOllamaStatus('Ollama running (no models)');
+        }
+      })
+      .catch(() => setOllamaStatus('Ollama offline'));
   }, []);
 
   return (
@@ -33,7 +52,11 @@ export function Header({ documentCount }: { documentCount: number }) {
         </div>
         <div className="flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-emerald-300">
           <Cpu className="h-4 w-4" />
-          <span>{status}</span>
+          <span>{backendStatus}</span>
+        </div>
+        <div className="flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-emerald-300">
+          <Gpu className="h-4 w-4" />
+          <span>{ollamaStatus}</span>
         </div>
       </div>
     </header>
