@@ -21,6 +21,7 @@ The system is designed for privacy, local-first workflows, and portfolio-level p
 ## Key Features
 
 ### Local-first architecture
+
 All major components run locally:
 
 - local LLM via Ollama
@@ -32,6 +33,7 @@ All major components run locally:
 No external AI APIs are required.
 
 ### End-to-end RAG pipeline
+
 The application implements a complete Retrieval-Augmented Generation workflow:
 
 1. document upload
@@ -45,6 +47,7 @@ The application implements a complete Retrieval-Augmented Generation workflow:
 9. answer rendering with sources
 
 ### Document support
+
 Supported file types:
 
 - PDF
@@ -52,6 +55,7 @@ Supported file types:
 - Markdown
 
 ### Chat experience
+
 The frontend includes:
 
 - ChatGPT-style layout
@@ -65,6 +69,7 @@ The frontend includes:
 - multi-document selection
 
 ### Document management
+
 Users can:
 
 - upload files
@@ -75,6 +80,7 @@ Users can:
 ## Tech Stack
 
 ### Frontend
+
 - Next.js 14
 - React
 - TypeScript
@@ -86,6 +92,7 @@ Users can:
 - Lucide React
 
 ### Backend
+
 - Python
 - FastAPI
 - LangChain
@@ -94,6 +101,7 @@ Users can:
 - PyPDF
 
 ### Infrastructure
+
 - Docker
 - Docker Compose
 - local environment configuration with `.env`
@@ -131,7 +139,7 @@ Answer + Sources
 ### Project structure
 
 ```text
-rag-local-chat/
+ragChat/
 ├── backend/
 │   ├── api/
 │   ├── core/
@@ -166,6 +174,7 @@ rag-local-chat/
 ## How It Works
 
 ### Document ingestion
+
 When a document is uploaded, the backend:
 
 - saves the file locally
@@ -181,6 +190,7 @@ Current chunking settings:
 - `chunk_overlap = 200`
 
 ### Retrieval
+
 When a user sends a question, the backend:
 
 - embeds the question
@@ -192,6 +202,7 @@ When a user sends a question, the backend:
 - returns the generated answer with source references
 
 ### Prompting
+
 The application uses a constrained RAG prompt so the model answers only from the indexed context.
 
 Example behavior:
@@ -204,25 +215,31 @@ Example behavior:
 ### Document endpoints
 
 #### `POST /documents/upload`
+
 Uploads and indexes a document.
 
 #### `GET /documents`
+
 Lists indexed documents.
 
 #### `DELETE /documents/{id}`
+
 Removes a document and its indexed vectors.
 
 ### Chat endpoints
 
 #### `POST /chat`
+
 Returns a full answer after retrieval and generation.
 
 #### `POST /chat/stream`
+
 Streams answer tokens progressively using SSE-style events.
 
 ### Health endpoint
 
 #### `GET /health`
+
 Basic backend health check.
 
 ## Local Development Requirements
@@ -232,18 +249,22 @@ Before running the project, make sure the following tools are installed.
 ### Required software
 
 #### Backend
+
 - Python 3.11 or newer
 - pip
 - virtual environment support
 
 #### Frontend
+
 - Node.js 18 or newer
 - npm
 
 #### Local AI runtime
+
 - Ollama installed and available in your system path
 
 #### Optional
+
 - Docker
 - Docker Compose
 
@@ -362,7 +383,6 @@ cd frontend
 
 Setup the frontend environment file:
 
-
 ```env
 NEXT_PUBLIC_API_URL=http://localhost:8000
 NEXT_PUBLIC_MODEL_STATUS=Ollama running
@@ -417,6 +437,7 @@ For the smoothest local setup, use this order:
 ## Example Usage
 
 ### Upload a document
+
 Use the sidebar to upload a file such as:
 
 - `mobydick.txt`
@@ -424,6 +445,7 @@ Use the sidebar to upload a file such as:
 - `paper.pdf`
 
 ### Ask questions
+
 Examples:
 
 - `Who is Captain Ahab?`
@@ -433,17 +455,21 @@ Examples:
 - `Which section discusses deployment?`
 
 ### Review source references
+
 Each assistant message can display its sources in a collapsible references panel, allowing users to inspect which parts of the indexed documents were used.
 
 ## Development Notes
 
 ### Chroma metadata
+
 Metadata stored with each chunk must use primitive values only. Avoid `None`, nested objects, or unsupported types when writing metadata into ChromaDB.
 
 ### Multilingual behavior
+
 If documents are in English, questions asked in English may produce more accurate retrieval results than questions in Portuguese, depending on the embedding model and local LLM used.
 
 ### Persistence
+
 The project stores:
 
 - uploaded files in `backend/storage/docs/`
@@ -457,7 +483,6 @@ Run tests from the project root:
 ```bash
 pytest
 ```
-
 
 ## Portfolio Value
 
