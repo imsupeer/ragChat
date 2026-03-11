@@ -385,7 +385,6 @@ Setup the frontend environment file:
 
 ```env
 NEXT_PUBLIC_API_URL=http://localhost:8000
-NEXT_PUBLIC_MODEL_STATUS=Ollama running
 ```
 
 Install dependencies:
