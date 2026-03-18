@@ -1,6 +1,5 @@
 from functools import lru_cache
 from typing import List
-from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -18,6 +17,7 @@ class Settings(BaseSettings):
     chroma_persist_directory: str = "./vector_db"
     documents_directory: str = "./storage/docs"
     registry_path: str = "./storage/registry.json"
+    sqlite_path: str = "./storage/app.db"
 
     chunk_size: int = 800
     chunk_overlap: int = 200

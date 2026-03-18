@@ -5,6 +5,8 @@ from services.chroma_service import ChromaService
 from services.document_registry import DocumentRegistry
 from services.ollama_service import OllamaService
 from services.chat_service import ChatService
+from services.sqlite_store import SQLiteStore
+from services.upload_queue import UploadQueueService
 
 
 @lru_cache
@@ -49,4 +51,22 @@ def get_chat_service() -> ChatService:
         ollama_service=get_ollama_service(),
         top_k=settings.top_k,
         max_context_chunks=settings.max_context_chunks,
+    )
+
+
+@lru_cache
+def get_sqlite_store() -> SQLiteStore:
+    settings = get_settings()
+    return SQLiteStore(settings.sqlite_path)
+
+
+@lru_cache
+def get_upload_queue_service() -> UploadQueueService:
+    settings = get_settings()
+    return UploadQueueService(
+        chroma_service=get_chroma_service(),
+        registry=get_document_registry(),
+        sqlite_store=get_sqlite_store(),
+        chunk_size=settings.chunk_size,
+        chunk_overlap=settings.chunk_overlap,
     )

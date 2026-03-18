@@ -1,15 +1,17 @@
 import os
-import uuid
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from core.config import Settings, get_settings
-from core.dependencies import get_chroma_service, get_document_registry
-from ingestion.processor import (
-    save_uploaded_file,
-    process_document,
-    build_registry_entry,
+from core.dependencies import (
+    get_chroma_service,
+    get_document_registry,
+    get_sqlite_store,
+    get_upload_queue_service,
 )
+from ingestion.processor import save_uploaded_file
 from services.chroma_service import ChromaService
 from services.document_registry import DocumentRegistry
+from services.sqlite_store import SQLiteStore
+from services.upload_queue import UploadQueueService
 
 router = APIRouter(prefix="/documents", tags=["documents"])
 
@@ -18,42 +20,51 @@ router = APIRouter(prefix="/documents", tags=["documents"])
 async def upload_document(
     file: UploadFile = File(...),
     settings: Settings = Depends(get_settings),
-    chroma_service: ChromaService = Depends(get_chroma_service),
-    registry: DocumentRegistry = Depends(get_document_registry),
+    sqlite_store: SQLiteStore = Depends(get_sqlite_store),
+    upload_queue: UploadQueueService = Depends(get_upload_queue_service),
 ):
     if not file.filename:
         raise HTTPException(status_code=400, detail="Filename is required.")
 
     file_bytes = await file.read()
+
     stored_path = save_uploaded_file(
-        file_bytes, file.filename, settings.documents_directory
+        file_bytes=file_bytes,
+        filename=file.filename,
+        target_dir=settings.documents_directory,
     )
 
-    try:
-        chunks = process_document(
-            file_path=stored_path,
-            original_filename=file.filename,
-            chunk_size=settings.chunk_size,
-            chunk_overlap=settings.chunk_overlap,
-        )
-    except Exception as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-    document_id = str(uuid.uuid4())
-    chroma_service.add_documents(document_id=document_id, docs=chunks)
-
-    entry = build_registry_entry(
-        document_id=document_id,
-        original_filename=file.filename,
+    job = sqlite_store.create_upload_job(
+        filename=file.filename,
+        file_size=len(file_bytes),
         stored_path=stored_path,
-        total_chunks=len(chunks),
     )
-    registry.add(entry)
+
+    upload_queue.enqueue(
+        {
+            "job_id": job["id"],
+            "filename": file.filename,
+            "stored_path": stored_path,
+        }
+    )
 
     return {
-        "message": "Document uploaded and indexed successfully.",
-        "document": entry,
+        "message": "Document uploaded successfully and queued for indexing.",
+        "job": job,
     }
+
+
+@router.get("/jobs")
+def list_jobs(sqlite_store: SQLiteStore = Depends(get_sqlite_store)):
+    return {"jobs": sqlite_store.list_upload_jobs()}
+
+
+@router.get("/jobs/{job_id}")
+def get_job(job_id: str, sqlite_store: SQLiteStore = Depends(get_sqlite_store)):
+    job = sqlite_store.get_upload_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found.")
+    return {"job": job}
 
 
 @router.get("")
