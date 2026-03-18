@@ -5,11 +5,38 @@ export type DocumentItem = {
   total_chunks: number;
 };
 
+export type UploadJob = {
+  id: string;
+  filename: string;
+  file_size: number;
+  stored_path: string;
+  status: 'queued' | 'processing' | 'completed' | 'failed';
+  upload_progress: number;
+  index_progress: number;
+  error?: string | null;
+  document_id?: string | null;
+  created_at?: string;
+};
+
+export type UploadQueueItem = {
+  localId: string;
+  file: File;
+  uploadProgress: number;
+  indexProgress: number;
+  status: 'queued' | 'uploading' | 'processing' | 'completed' | 'failed';
+  jobId?: string;
+  error?: string;
+};
+
 export type UploadDocumentResponse = {
   message: string;
-  document: DocumentItem;
+  job: UploadJob;
 };
 
 export type DocumentsResponse = {
   documents: DocumentItem[];
+};
+
+export type UploadJobsResponse = {
+  jobs: UploadJob[];
 };

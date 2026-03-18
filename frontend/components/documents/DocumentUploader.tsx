@@ -4,18 +4,19 @@ import { useCallback } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { FileUp } from 'lucide-react';
 
-export function DocumentUploader({ onUpload, uploading }: { onUpload: (file: File) => Promise<void>; uploading: boolean }) {
+export function DocumentUploader({ onUpload }: { onUpload: (files: File[]) => Promise<void> }) {
   const onDrop = useCallback(
     async (acceptedFiles: File[]) => {
-      const [file] = acceptedFiles;
-      if (file) await onUpload(file);
+      if (acceptedFiles.length) {
+        await onUpload(acceptedFiles);
+      }
     },
     [onUpload],
   );
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
-    multiple: false,
+    multiple: true,
     accept: {
       'application/pdf': ['.pdf'],
       'text/plain': ['.txt'],
@@ -38,7 +39,7 @@ export function DocumentUploader({ onUpload, uploading }: { onUpload: (file: Fil
         </div>
         <div>
           <div className="text-sm font-medium">Upload documents</div>
-          <div className="text-xs text-gray-400">{uploading ? 'Uploading and indexing...' : 'PDF, TXT, Markdown — drag and drop or click'}</div>
+          <div className="text-xs text-gray-400">PDF, TXT, Markdown — multiple files supported</div>
         </div>
       </div>
     </button>

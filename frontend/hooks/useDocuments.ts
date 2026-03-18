@@ -1,19 +1,34 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { deleteDocument, listDocuments, uploadDocument } from '@/services/documentService';
-import type { DocumentItem } from '@/types/document';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { deleteDocument, getUploadJob, listDocuments, uploadDocumentWithProgress } from '@/services/documentService';
+import type { DocumentItem, UploadQueueItem } from '@/types/document';
+
+function uid() {
+  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
+    return crypto.randomUUID();
+  }
+  return Math.random().toString(36).slice(2);
+}
 
 export function useDocuments() {
   const [documents, setDocuments] = useState<DocumentItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [uploading, setUploading] = useState(false);
+  const [queueItems, setQueueItems] = useState<UploadQueueItem[]>([]);
+
+  const processingRef = useRef(false);
+  const queueRef = useRef<UploadQueueItem[]>([]);
+
+  useEffect(() => {
+    queueRef.current = queueItems;
+  }, [queueItems]);
 
   const refreshDocuments = useCallback(async () => {
     setLoading(true);
     setError(null);
+
     try {
       const data = await listDocuments();
       setDocuments(data.documents);
@@ -29,26 +44,127 @@ export function useDocuments() {
     void refreshDocuments();
   }, [refreshDocuments]);
 
+  const processQueue = useCallback(async () => {
+    if (processingRef.current) return;
+    processingRef.current = true;
+
+    try {
+      while (true) {
+        const nextItem = queueRef.current.find((item) => item.status === 'queued');
+
+        if (!nextItem) {
+          break;
+        }
+
+        setQueueItems((current) =>
+          current.map((item) => (item.localId === nextItem.localId ? { ...item, status: 'uploading', uploadProgress: 0, indexProgress: 0 } : item)),
+        );
+
+        try {
+          const uploadResponse = await uploadDocumentWithProgress(nextItem.file, (progress) => {
+            setQueueItems((current) => current.map((item) => (item.localId === nextItem.localId ? { ...item, uploadProgress: progress } : item)));
+          });
+
+          const jobId = uploadResponse.job.id;
+
+          setQueueItems((current) =>
+            current.map((item) =>
+              item.localId === nextItem.localId
+                ? {
+                    ...item,
+                    status: 'processing',
+                    uploadProgress: 100,
+                    jobId,
+                  }
+                : item,
+            ),
+          );
+
+          let completed = false;
+
+          while (!completed) {
+            await new Promise((resolve) => setTimeout(resolve, 1000));
+
+            const data = await getUploadJob(jobId);
+            const job = data.job;
+
+            setQueueItems((current) =>
+              current.map((item) =>
+                item.localId === nextItem.localId
+                  ? {
+                      ...item,
+                      status: job.status === 'completed' ? 'completed' : job.status === 'failed' ? 'failed' : 'processing',
+                      indexProgress: job.index_progress,
+                      error: job.error ?? undefined,
+                    }
+                  : item,
+              ),
+            );
+
+            if (job.status === 'completed') {
+              completed = true;
+              await refreshDocuments();
+            }
+
+            if (job.status === 'failed') {
+              completed = true;
+            }
+          }
+        } catch (err) {
+          setQueueItems((current) =>
+            current.map((item) =>
+              item.localId === nextItem.localId
+                ? {
+                    ...item,
+                    status: 'failed',
+                    error: err instanceof Error ? err.message : 'Upload failed',
+                  }
+                : item,
+            ),
+          );
+        }
+      }
+    } finally {
+      processingRef.current = false;
+
+      const stillQueued = queueRef.current.some((item) => item.status === 'queued');
+      if (stillQueued) {
+        void processQueue();
+      }
+    }
+  }, [refreshDocuments]);
+
   const handleUpload = useCallback(
-    async (file: File) => {
-      setUploading(true);
+    async (files: File[]) => {
       setError(null);
-      try {
-        await uploadDocument(file);
-        await refreshDocuments();
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Upload failed');
-        throw err;
-      } finally {
-        setUploading(false);
+
+      const ordered = [...files].sort((a, b) => a.size - b.size);
+
+      const newItems: UploadQueueItem[] = ordered.map((file) => ({
+        localId: uid(),
+        file,
+        uploadProgress: 0,
+        indexProgress: 0,
+        status: 'queued',
+      }));
+
+      setQueueItems((current) => {
+        const next = [...current, ...newItems];
+        queueRef.current = next;
+        return next;
+      });
+
+      if (!processingRef.current) {
+        void processQueue();
       }
     },
-    [refreshDocuments],
+    [processQueue],
   );
 
   const handleDelete = useCallback(
     async (documentId: string) => {
       setError(null);
+
       try {
         await deleteDocument(documentId);
         await refreshDocuments();
@@ -69,13 +185,13 @@ export function useDocuments() {
       documents,
       loading,
       error,
-      uploading,
       selectedIds,
+      queueItems,
       refreshDocuments,
       handleUpload,
       handleDelete,
       toggleSelected,
     }),
-    [documents, loading, error, uploading, selectedIds, refreshDocuments, handleUpload, handleDelete, toggleSelected],
+    [documents, loading, error, selectedIds, queueItems, refreshDocuments, handleUpload, handleDelete, toggleSelected],
   );
 }

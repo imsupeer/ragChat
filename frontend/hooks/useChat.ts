@@ -1,7 +1,6 @@
 'use client';
 
-import { useCallback, useMemo, useState } from 'react';
-import { create } from 'zustand';
+import { useCallback, useMemo } from 'react';
 import { useStreaming } from '@/hooks/useStreaming';
 import type { ChatMessage, SourceReference } from '@/types/chat';
 
@@ -12,120 +11,120 @@ function uid() {
   return Math.random().toString(36).slice(2);
 }
 
-type ChatStore = {
-  messages: ChatMessage[];
-  appendMessage: (message: ChatMessage) => void;
-  updateMessage: (id: string, updater: (message: ChatMessage) => ChatMessage) => void;
-  reset: () => void;
-};
-
-const initialAssistantMessage: ChatMessage = {
-  id: uid(),
-  role: 'assistant',
-  content: 'Upload one or more documents, then ask anything about them.',
-};
-
-const useChatStore = create<ChatStore>((set) => ({
-  messages: [initialAssistantMessage],
-  appendMessage: (message) => set((state) => ({ messages: [...state.messages, message] })),
-  updateMessage: (id, updater) =>
-    set((state) => ({
-      messages: state.messages.map((message) => (message.id === id ? updater(message) : message)),
-    })),
-  reset: () =>
-    set({
-      messages: [
-        {
-          id: uid(),
-          role: 'assistant',
-          content: 'Upload one or more documents, then ask anything about them.',
-        },
-      ],
-    }),
-}));
-
-export function useChat(selectedDocumentIds: string[]) {
-  const { messages, appendMessage, updateMessage } = useChatStore();
+export function useChat(
+  activeChatId: string | null,
+  selectedDocumentIds: string[],
+  messages: ChatMessage[],
+  setMessages: React.Dispatch<React.SetStateAction<ChatMessage[]>>,
+) {
   const { isStreaming, streamError, startStreaming, cancelStreaming } = useStreaming();
-  const [pendingQuestion, setPendingQuestion] = useState<string | null>(null);
 
   const sendMessage = useCallback(
     async (question: string) => {
       const trimmed = question.trim();
-      if (!trimmed || isStreaming) return;
+      if (!trimmed || isStreaming || !activeChatId) return;
 
       const userMessage: ChatMessage = {
         id: uid(),
         role: 'user',
         content: trimmed,
+        chat_id: activeChatId,
       };
 
       const assistantId = uid();
 
-      appendMessage(userMessage);
-      appendMessage({
-        id: assistantId,
-        role: 'assistant',
-        content: '',
-        sources: [],
-        isStreaming: true,
-      });
-
-      setPendingQuestion(trimmed);
+      setMessages((current) => [
+        ...current,
+        userMessage,
+        {
+          id: assistantId,
+          role: 'assistant',
+          content: '',
+          sources: [],
+          isStreaming: true,
+          chat_id: activeChatId,
+        },
+      ]);
 
       await startStreaming(
         {
           question: trimmed,
           document_ids: selectedDocumentIds.length ? selectedDocumentIds : null,
+          chat_id: activeChatId,
         },
         {
           onToken: (token) => {
-            updateMessage(assistantId, (message) => ({
-              ...message,
-              content: `${message.content}${token}`,
-              isStreaming: true,
-            }));
+            setMessages((current) =>
+              current.map((message) =>
+                message.id === assistantId
+                  ? {
+                      ...message,
+                      content: `${message.content}${token}`,
+                      isStreaming: true,
+                    }
+                  : message,
+              ),
+            );
           },
           onSources: (sources: SourceReference[]) => {
-            updateMessage(assistantId, (message) => ({
-              ...message,
-              sources,
-            }));
+            setMessages((current) =>
+              current.map((message) =>
+                message.id === assistantId
+                  ? {
+                      ...message,
+                      sources,
+                    }
+                  : message,
+              ),
+            );
           },
           onDone: () => {
-            updateMessage(assistantId, (message) => ({
-              ...message,
-              isStreaming: false,
-            }));
+            setMessages((current) =>
+              current.map((message) =>
+                message.id === assistantId
+                  ? {
+                      ...message,
+                      isStreaming: false,
+                    }
+                  : message,
+              ),
+            );
           },
           onError: (error) => {
-            updateMessage(assistantId, (message) => ({
-              ...message,
-              content: message.content || error.message,
-              error: true,
-              isStreaming: false,
-            }));
+            setMessages((current) =>
+              current.map((message) =>
+                message.id === assistantId
+                  ? {
+                      ...message,
+                      content: message.content || error.message,
+                      error: true,
+                      isStreaming: false,
+                    }
+                  : message,
+              ),
+            );
           },
         },
       );
     },
-    [appendMessage, isStreaming, selectedDocumentIds, startStreaming, updateMessage],
+    [activeChatId, isStreaming, selectedDocumentIds, setMessages, startStreaming],
   );
 
   const regenerateLast = useCallback(async () => {
-    if (!pendingQuestion || isStreaming) return;
-    await sendMessage(pendingQuestion);
-  }, [isStreaming, pendingQuestion, sendMessage]);
+    const lastUser = [...messages].reverse().find((m) => m.role === 'user');
+    if (lastUser) {
+      await sendMessage(lastUser.content);
+    }
+  }, [messages, sendMessage]);
 
   return useMemo(
     () => ({
-      messages,
       isStreaming,
       streamError,
       sendMessage,
       cancelStreaming,
       regenerateLast,
     }),
-    [messages, isStreaming, streamError, sendMessage, cancelStreaming, regenerateLast],
+    [isStreaming, streamError, sendMessage, cancelStreaming, regenerateLast],
   );
 }

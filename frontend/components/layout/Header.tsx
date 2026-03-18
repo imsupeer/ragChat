@@ -1,12 +1,16 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Cpu, Gpu, Files } from 'lucide-react';
+import { Cpu, Files, Gpu } from 'lucide-react';
 
 function getStatusColor(status: string) {
-  if (status.includes('offline')) return 'border-red-500/30 bg-red-500/10 text-red-300';
+  if (status.toLowerCase().includes('offline')) {
+    return 'border-red-500/30 bg-red-500/10 text-red-300';
+  }
 
-  if (status.includes('no models')) return 'border-yellow-500/30 bg-yellow-500/10 text-yellow-300';
+  if (status.toLowerCase().includes('no models')) {
+    return 'border-yellow-500/30 bg-yellow-500/10 text-yellow-300';
+  }
 
   return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300';
 }
@@ -40,7 +44,7 @@ export function Header({ documentCount }: { documentCount: number }) {
 
     checkService(
       `${ollamaUrl}/api/tags`,
-      (data) => (data.models?.length > 0 ? 'Ollama ready' : 'Ollama running (no models)'),
+      (data) => (data?.models?.length > 0 ? 'Ollama ready' : 'Ollama running (no models)'),
       () => 'Ollama offline',
       setOllamaStatus,
     );
@@ -50,7 +54,7 @@ export function Header({ documentCount }: { documentCount: number }) {
   const ollamaColor = getStatusColor(ollamaStatus);
 
   return (
-    <header className="flex flex-col gap-3 border-b border-border px-6 py-4 md:flex-row md:items-center md:justify-between">
+    <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
       <div>
         <h1 className="text-xl font-semibold">RAG Chat</h1>
         <p className="text-sm text-gray-400">Chat with your documents using your local FastAPI + Ollama stack.</p>
@@ -72,6 +76,6 @@ export function Header({ documentCount }: { documentCount: number }) {
           <span>{ollamaStatus}</span>
         </div>
       </div>
-    </header>
+    </div>
   );
 }

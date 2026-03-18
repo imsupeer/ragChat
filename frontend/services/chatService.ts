@@ -57,17 +57,9 @@ export async function streamChatMessage(
       try {
         const event = JSON.parse(json) as StreamEvent;
 
-        if (event.type === 'sources') {
-          handlers.onSources?.(event);
-        }
-
-        if (event.type === 'token') {
-          handlers.onToken?.(event.token);
-        }
-
-        if (event.type === 'done') {
-          handlers.onDone?.();
-        }
+        if (event.type === 'sources') handlers.onSources?.(event);
+        if (event.type === 'token') handlers.onToken?.(event.token);
+        if (event.type === 'done') handlers.onDone?.();
       } catch (error) {
         handlers.onError?.(error as Error);
       }
