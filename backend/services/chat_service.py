@@ -1,5 +1,4 @@
-import json
-from typing import Optional, List, AsyncGenerator
+from typing import Optional, List
 from prompts.rag_prompt import build_rag_prompt
 from retrieval.formatter import format_retrieved_chunks, serialize_sources
 from retrieval.retriever import Retriever
@@ -20,7 +19,7 @@ class ChatService:
         self.retriever = Retriever(chroma_service=chroma_service, top_k=top_k)
         self.max_context_chunks = max_context_chunks
 
-    async def ask(
+    def prepare(
         self,
         question: str,
         document_ids: Optional[List[str]] = None,
@@ -29,34 +28,22 @@ class ChatService:
         docs = docs[: self.max_context_chunks]
         context = format_retrieved_chunks(docs)
         prompt = build_rag_prompt(retrieved_chunks=context, user_question=question)
-        answer = await self.ollama_service.generate(prompt)
 
         return {
-            "answer": answer,
+            "prompt": prompt,
+            "docs": docs,
             "sources": serialize_sources(docs),
         }
 
-    async def stream_answer(
+    async def ask(
         self,
         question: str,
         document_ids: Optional[List[str]] = None,
-    ) -> AsyncGenerator[str, None]:
-        docs = self.retriever.search(question=question, document_ids=document_ids)
-        docs = docs[: self.max_context_chunks]
-        context = format_retrieved_chunks(docs)
-        prompt = build_rag_prompt(retrieved_chunks=context, user_question=question)
+    ) -> dict:
+        prepared = self.prepare(question=question, document_ids=document_ids)
+        answer = await self.ollama_service.generate(prepared["prompt"])
 
-        initial_payload = {
-            "type": "sources",
-            "sources": serialize_sources(docs),
+        return {
+            "answer": answer,
+            "sources": prepared["sources"],
         }
-        yield f"data: {json.dumps(initial_payload, ensure_ascii=False)}\n\n"
-
-        async for token in self.ollama_service.stream(prompt):
-            payload = {
-                "type": "token",
-                "token": token,
-            }
-            yield f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
-
-        yield 'data: {"type":"done"}\n\n'
