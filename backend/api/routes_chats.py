@@ -10,6 +10,10 @@ class CreateChatRequest(BaseModel):
     title: str | None = None
 
 
+class UpdateChatRequest(BaseModel):
+    title: str
+
+
 @router.get("")
 def list_chats(sqlite_store: SQLiteStore = Depends(get_sqlite_store)):
     return {"chats": sqlite_store.list_chats()}
@@ -22,6 +26,24 @@ def create_chat(
 ):
     chat = sqlite_store.create_chat(title=payload.title)
     return {"chat": chat}
+
+
+@router.patch("/{chat_id}")
+def update_chat(
+    chat_id: str,
+    payload: UpdateChatRequest,
+    sqlite_store: SQLiteStore = Depends(get_sqlite_store),
+):
+    chat = sqlite_store.get_chat(chat_id)
+    if not chat:
+        raise HTTPException(status_code=404, detail="Chat not found.")
+
+    title = payload.title.strip()
+    if not title:
+        raise HTTPException(status_code=400, detail="Chat title cannot be empty.")
+
+    updated_chat = sqlite_store.update_chat_title(chat_id, title)
+    return {"chat": updated_chat}
 
 
 @router.delete("/{chat_id}")

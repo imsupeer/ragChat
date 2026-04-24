@@ -1,25 +1,31 @@
 'use client';
 
-import { useState } from 'react';
 import { SendHorizonal, Square } from 'lucide-react';
+import { useAppStore } from '@/store/useAppStore';
 
 export function ChatInput({
+  activeChatId,
   onSend,
   onCancel,
   disabled,
   isStreaming,
 }: {
+  activeChatId: string | null;
   onSend: (value: string) => Promise<void>;
   onCancel: () => void;
   disabled?: boolean;
   isStreaming: boolean;
 }) {
-  const [value, setValue] = useState('');
+  const drafts = useAppStore((state) => state.drafts);
+  const unsavedDraft = useAppStore((state) => state.unsavedDraft);
+  const setDraft = useAppStore((state) => state.setDraft);
+
+  const value = activeChatId ? (drafts[activeChatId] ?? '') : unsavedDraft;
 
   async function handleSubmit() {
     const trimmed = value.trim();
     if (!trimmed || disabled) return;
-    setValue('');
+    setDraft(activeChatId, '');
     await onSend(trimmed);
   }
 
@@ -28,7 +34,7 @@ export function ChatInput({
       <div className="mx-auto flex max-w-4xl items-end gap-3 rounded-3xl border border-border bg-panel px-4 py-3 shadow-lg">
         <textarea
           value={value}
-          onChange={(event) => setValue(event.target.value)}
+          onChange={(event) => setDraft(activeChatId, event.target.value)}
           onKeyDown={async (event) => {
             if (event.key === 'Enter' && !event.shiftKey) {
               event.preventDefault();
@@ -37,6 +43,7 @@ export function ChatInput({
           }}
           rows={1}
           placeholder="Ask about your documents..."
+          aria-label="Message composer"
           className="max-h-48 min-h-[28px] flex-1 resize-none bg-transparent text-sm text-white outline-none placeholder:text-gray-500"
         />
 

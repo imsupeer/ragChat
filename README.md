@@ -1,319 +1,181 @@
-# Local RAG Chat
+# Local RAG Workspace
 
-A fully local Retrieval-Augmented Generation application that allows users to upload documents and chat with them using a local language model.
+Personal project focused on one problem: how to build a local RAG system that is inspectable, reproducible, and honest about its trade-offs.
 
-This project was designed as a production-style AI application that runs entirely on local infrastructure, without relying on external cloud APIs. It combines document ingestion, semantic search, vector storage, and local LLM inference into a clean full-stack experience.
+This is not positioned as a SaaS clone or "chat with docs" product. It is a full-stack engineering project that demonstrates document ingestion, structure-aware chunking, hybrid retrieval, reranking, grounded generation, streaming UX, source attribution, observability, and lightweight evaluation running entirely on local infrastructure.
 
-## Overview
+## Screenshots
 
-Local RAG Chat enables users to:
+<p align="center">
+  <img src="docs/screenshots/workspace-overview.png" alt="Main workspace with chat, documents, pipeline stages, and evidence panel" width="100%" />
+</p>
 
-- upload PDF, TXT, and Markdown documents
-- automatically process and index those documents
-- ask natural language questions about indexed content
-- retrieve relevant document chunks through semantic search
-- generate answers using a local LLM running with Ollama
-- inspect source references used to produce each answer
-- interact through a modern chat interface inspired by ChatGPT
+<p align="center">
+  <img src="docs/screenshots/evidence-panel.png" alt="Evidence workspace showing retrieval diagnostics, timings, and token estimates" width="49%" />
+  <img src="docs/screenshots/upload-and-documents.png" alt="Chat response with indexed documents and source inspection workflow" width="49%" />
+</p>
 
-The system is designed for privacy, local-first workflows, and portfolio-level presentation of a complete AI product.
+## What This Project Demonstrates
 
-## Key Features
+- Full local RAG stack using FastAPI, Next.js, Ollama, ChromaDB, LangChain, SQLite, and Zustand
+- Structure-aware ingestion for PDF, TXT, and Markdown instead of fixed-size splitting only
+- Dense retrieval baseline with optional BM25 lexical retrieval and Reciprocal Rank Fusion
+- Optional post-retrieval reranking to improve final chunk ordering
+- Grounded prompt construction with explicit evidence formatting
+- Streaming answers with source references and debug metadata exposed to the UI
+- Structured observability for retrieval, reranking, prompt building, and generation
+- Lightweight offline evaluation harness for retrieval recall and answer correctness
 
-### Local-first architecture
+## Why I Built It
 
-All major components run locally:
+Most RAG demos stop at "upload a file and ask a question." I wanted a project that was more useful in interviews and more realistic as an engineering artifact:
 
-- local LLM via Ollama
-- local embedding generation
-- local vector database persistence with ChromaDB
-- local backend with FastAPI
-- local frontend with Next.js
+- the backend should separate ingestion from chat serving
+- retrieval decisions should be visible and measurable
+- the frontend should show how an answer was built, not just render text
+- the whole system should run locally so infrastructure, latency, and quality trade-offs stay visible
 
-No external AI APIs are required.
+The result is a portfolio project about system design, not just model integration.
 
-### End-to-end RAG pipeline
+## Architecture
 
-The application implements a complete Retrieval-Augmented Generation workflow:
+```text
+Upload flow
+  Next.js
+    -> POST /documents/upload
+    -> save raw file to local storage
+    -> create upload job in SQLite
+    -> enqueue background indexing task
+    -> load + segment document
+    -> structure-aware chunking
+    -> embed with Ollama
+    -> store chunks in ChromaDB
+    -> register document metadata
 
-1. document upload
-2. text extraction
-3. chunking
-4. embeddings generation
-5. vector storage
-6. semantic retrieval
-7. prompt construction
-8. local LLM answer generation
-9. answer rendering with sources
+Question flow
+  Next.js
+    -> POST /chat or /chat/stream
+    -> retrieve dense or hybrid candidates
+    -> optional reranking
+    -> build grounded prompt
+    -> generate with Ollama
+    -> stream tokens + sources + debug info
+    -> persist chat history in SQLite
+```
 
-### Document support
+## Technical Highlights
 
-Supported file types:
+### 1. Structure-aware chunking
 
-- PDF
-- TXT
-- Markdown
+The ingestion pipeline first segments documents by structure, then applies recursive splitting to stay within chunk limits.
 
-### Chat experience
+- Markdown is split by heading hierarchy
+- PDFs preserve page numbers and detect heading-like lines heuristically
+- chunks carry `section_title`, `section_path`, and `page` metadata
 
-The frontend includes:
+This improves both retrieval quality and source attribution compared with pure fixed-size chunking.
 
-- ChatGPT-style layout
-- streaming assistant responses
-- markdown rendering
-- syntax highlighting for code blocks
-- copy response action
-- regenerate response action
-- typing indicator
-- source expansion panel
-- multi-document selection
+### 2. Hybrid retrieval
 
-### Document management
+Dense similarity search is still the baseline, but the system can optionally add local BM25 keyword search.
 
-Users can:
+- dense search catches semantic matches
+- BM25 helps with filenames, identifiers, exact terms, and version-like strings
+- results are merged with Reciprocal Rank Fusion
 
-- upload files
-- view indexed documents
-- select one or more documents for retrieval scope
-- delete indexed documents
+This makes the retrieval pipeline more realistic than a dense-only demo while keeping everything local and lightweight.
 
-## Tech Stack
+### 3. Optional reranking
 
-### Frontend
+After retrieval, the system can rerank the top candidates with a lightweight local scoring function.
 
-- Next.js 14
-- React
-- TypeScript
-- Tailwind CSS
-- Zustand
-- react-dropzone
-- react-markdown
-- react-syntax-highlighter
-- Lucide React
+- improves final chunk ordering
+- helps promote chunks that directly answer the question
+- stays cheaper and easier to inspect than a heavy cross-encoder dependency
+
+### 4. Observability built into the RAG path
+
+The backend exposes structured debug data instead of hiding the pipeline behind a spinner.
+
+Available debug data includes:
+
+- retrieval scores, methods, and chunk IDs
+- rerank rank and rerank score
+- prompt length and token estimates
+- generation latency and output token estimates
+- total request latency and per-stage timings
+
+The frontend surfaces this through an evidence workspace so the project demonstrates RAG debugging, not just RAG output.
+
+### 5. Evaluation harness
+
+The repo includes a lightweight evaluation script and a small fixture dataset.
+
+It can measure:
+
+- retrieval recall@k
+- whether the expected chunk was retrieved
+- simple answer correctness heuristics
+
+That gives the project a measurable path for comparing chunking, retrieval, and reranking changes.
+
+## Key Engineering Decisions
+
+| Decision | Why it was chosen | Trade-off |
+| --- | --- | --- |
+| Use Ollama for chat and embeddings | Keeps the stack fully local and reproducible | Local models are weaker than top hosted models |
+| Split persistence across Chroma, SQLite, JSON, and filesystem | Each concern stays easy to inspect | Consistency has to be managed manually |
+| Use an in-process queue for indexing | Uploads return quickly without extra infrastructure | Jobs are not durable across crashes |
+| Make hybrid retrieval and reranking optional | Baseline behavior stays simple and debuggable | More config branches to reason about |
+| Surface debug metadata in the API and UI | Makes failures easier to diagnose | Adds payload size and implementation complexity |
+| Keep the prompt strict and grounded | Makes hallucinations easier to spot | Missed retrievals produce conservative failures |
+
+## Current Stack
 
 ### Backend
 
-- Python
 - FastAPI
 - LangChain
 - Ollama
 - ChromaDB
+- SQLite
 - PyPDF
 
-### Infrastructure
+### Frontend
 
-- Docker
-- Docker Compose
-- local environment configuration with `.env`
+- Next.js 14
+- React 18
+- TypeScript
+- Tailwind CSS
+- Zustand
 
-## Architecture
+## Repository Guide
 
-### High-level flow
+- `scripts/eval.py`: lightweight evaluation harness
+- `tests/`: focused pytest suite across API, ingestion, retrieval, and prompt logic
 
-```text
-Document Upload
-↓
-Text Extraction
-↓
-Chunking
-↓
-Embedding Generation
-↓
-Vector Storage (ChromaDB)
-↓
-User Question
-↓
-Query Embedding
-↓
-Similarity Search
-↓
-Top-K Retrieval
-↓
-Prompt Construction
-↓
-Local LLM Generation (Ollama)
-↓
-Answer + Sources
-```
+## Local Development
 
-### Project structure
+### Prerequisites
 
-```text
-ragChat/
-├── backend/
-│   ├── api/
-│   ├── core/
-│   ├── embeddings/
-│   ├── ingestion/
-│   ├── prompts/
-│   ├── retrieval/
-│   ├── services/
-│   ├── storage/
-│   ├── .env
-│   ├── main.py
-│   └── requirements.txt
-├── frontend/
-│   ├── app/
-│   ├── components/
-│   ├── hooks/
-│   ├── services/
-│   ├── styles/
-│   ├── types/
-│   ├── .env
-│   ├── package.json
-│   └── tailwind.config.ts
-├── docker/
-│   ├── backend.Dockerfile
-│   ├── frontend.Dockerfile
-│   └── docker-compose.yml
-├── tests/
-├── vector_db/
-└── README.md
-```
+- Python 3.11+
+- Node.js 18+
+- Ollama running locally
 
-## How It Works
-
-### Document ingestion
-
-When a document is uploaded, the backend:
-
-- saves the file locally
-- extracts raw text
-- splits content into chunks
-- enriches metadata
-- generates embeddings
-- stores chunks in ChromaDB
-
-Current chunking settings:
-
-- `chunk_size = 800`
-- `chunk_overlap = 200`
-
-### Retrieval
-
-When a user sends a question, the backend:
-
-- embeds the question
-- performs semantic similarity search in ChromaDB
-- retrieves the top relevant chunks
-- formats the retrieved context
-- builds the final prompt
-- sends the prompt to the local LLM
-- returns the generated answer with source references
-
-### Prompting
-
-The application uses a constrained RAG prompt so the model answers only from the indexed context.
-
-Example behavior:
-
-- if the answer exists in the document set, the assistant answers based on those sources
-- if the answer is not present, the assistant should respond that it could not find the answer in the provided documents
-
-## API Endpoints
-
-### Document endpoints
-
-#### `POST /documents/upload`
-
-Uploads and indexes a document.
-
-#### `GET /documents`
-
-Lists indexed documents.
-
-#### `DELETE /documents/{id}`
-
-Removes a document and its indexed vectors.
-
-### Chat endpoints
-
-#### `POST /chat`
-
-Returns a full answer after retrieval and generation.
-
-#### `POST /chat/stream`
-
-Streams answer tokens progressively using SSE-style events.
-
-### Health endpoint
-
-#### `GET /health`
-
-Basic backend health check.
-
-## Local Development Requirements
-
-Before running the project, make sure the following tools are installed.
-
-### Required software
-
-#### Backend
-
-- Python 3.11 or newer
-- pip
-- virtual environment support
-
-#### Frontend
-
-- Node.js 18 or newer
-- npm
-
-#### Local AI runtime
-
-- Ollama installed and available in your system path
-
-#### Optional
-
-- Docker
-- Docker Compose
-
-## Required Ollama Models
-
-This project expects two local models:
-
-- a chat model
-- an embedding model
-
-Recommended examples:
-
-- chat model: `llama3.1`
-- embedding model: `mxbai-embed-large`
-
-Install them with:
+Recommended models:
 
 ```bash
 ollama pull llama3.1
 ollama pull mxbai-embed-large
-```
-
-Start Ollama:
-
-```bash
 ollama serve
 ```
 
-## Running the Project Locally
+### Backend
 
-### 1. Clone the repository
-
-```bash
-git clone https://github.com/imsupeer/ragChat.git
-cd ragChat
-```
-
-### 2. Configure the backend
-
-Go to the backend folder:
-
-```bash
-cd backend
-```
-
-Setup the environment file:
+Create `backend/.env`:
 
 ```env
-APP_NAME=Local RAG Chat
+APP_NAME=Local RAG Workspace
 APP_ENV=development
 API_HOST=0.0.0.0
 API_PORT=8000
@@ -326,174 +188,101 @@ OLLAMA_EMBED_MODEL=mxbai-embed-large
 CHROMA_PERSIST_DIRECTORY=./vector_db
 DOCUMENTS_DIRECTORY=./storage/docs
 REGISTRY_PATH=./storage/registry.json
+SQLITE_PATH=./storage/app.db
 
 CHUNK_SIZE=800
 CHUNK_OVERLAP=200
 TOP_K=5
 MAX_CONTEXT_CHUNKS=5
+ENABLE_HYBRID=true
+ENABLE_RERANKING=true
+RERANK_TOP_M=10
+RERANK_TOP_K=5
 ```
 
-Create and activate a virtual environment.
-
-On Linux/macOS:
+Run:
 
 ```bash
+cd backend
 python -m venv venv
-source venv/bin/activate
-```
-
-On Windows PowerShell:
-
-```powershell
-python -m venv venv
-venv\Scripts\Activate.ps1
-```
-
-Install dependencies:
-
-```bash
 pip install -r requirements.txt
-```
-
-Run the backend:
-
-```bash
 uvicorn main:app --reload
 ```
 
-The backend will be available at:
+### Frontend
 
-```text
-http://localhost:8000
-```
-
-Swagger documentation:
-
-```text
-http://localhost:8000/docs
-```
-
-### 3. Configure the frontend
-
-Open a new terminal and go to the frontend folder:
-
-```bash
-cd frontend
-```
-
-Setup the frontend environment file:
+Create `frontend/.env`:
 
 ```env
 NEXT_PUBLIC_API_URL=http://localhost:8000
 ```
 
-Install dependencies:
+Run:
 
 ```bash
+cd frontend
 npm install
-```
-
-Start the frontend:
-
-```bash
 npm run dev
 ```
 
-The frontend will be available at:
-
-```text
-http://localhost:3000
-```
-
-## Running with Docker
-
-If you prefer containerized execution, use the Docker setup included in the project.
-
-From the `docker/` directory:
+## Docker
 
 ```bash
 cd docker
 docker compose up --build
 ```
 
-This will start:
+The current Docker setup still expects Ollama to be running locally and reachable from the backend container.
 
-- the frontend container
-- the backend container
+## Verification
 
-Note that Ollama must still be available and reachable from the backend container, depending on your host configuration.
-
-## Recommended Startup Order
-
-For the smoothest local setup, use this order:
-
-1. start Ollama
-2. make sure the required models are installed
-3. start the backend and frontend using docker
-4. upload a document
-5. begin chatting
-
-## Example Usage
-
-### Upload a document
-
-Use the sidebar to upload a file such as:
-
-- `mobydick.txt`
-- `notes.md`
-- `paper.pdf`
-
-### Ask questions
-
-Examples:
-
-- `Who is Captain Ahab?`
-- `Summarize the main idea of this document.`
-- `What does the document say about system architecture?`
-- `List the most important technical decisions mentioned.`
-- `Which section discusses deployment?`
-
-### Review source references
-
-Each assistant message can display its sources in a collapsible references panel, allowing users to inspect which parts of the indexed documents were used.
-
-## Development Notes
-
-### Chroma metadata
-
-Metadata stored with each chunk must use primitive values only. Avoid `None`, nested objects, or unsupported types when writing metadata into ChromaDB.
-
-### Multilingual behavior
-
-If documents are in English, questions asked in English may produce more accurate retrieval results than questions in Portuguese, depending on the embedding model and local LLM used.
-
-### Persistence
-
-The project stores:
-
-- uploaded files in `backend/storage/docs/`
-- registry data in `backend/storage/registry.json`
-- vector database files in `vector_db/`
-
-## Testing
-
-Run tests from the project root:
+From the repo root:
 
 ```bash
-pytest
+python -m pytest
 ```
 
-## Portfolio Value
+From `frontend/`:
 
-This project demonstrates practical experience in:
+```bash
+npm run build
+```
 
-- full-stack AI product development
-- Retrieval-Augmented Generation architecture
-- local LLM integration
-- vector search systems
-- LangChain orchestration
-- document ingestion pipelines
-- modern React and Next.js frontend engineering
-- streaming UX patterns
-- production-style code organization
-- Docker-based local infrastructure
+Optional retrieval evaluation:
+
+```bash
+python scripts/eval.py --skip-generation
+python scripts/eval.py
+```
+
+## Limitations
+
+This project is intentionally strong as a portfolio artifact because the limitations are visible rather than hidden.
+
+- The ingestion worker is in-process and not durable across backend restarts
+- BM25 is rebuilt on demand instead of maintained as a dedicated lexical index
+- Reranking is heuristic rather than model-based
+- PDF handling is text extraction only and not layout-aware
+- Persistence is split across several local stores without cross-store transactions
+- The evaluation harness is small and heuristic, not a full benchmark suite
+- The project is local-first and single-user; it does not try to solve auth, multitenancy, or hosted operations
+
+## Where I Would Take It Next
+
+- stronger retrieval evaluation with a larger gold dataset
+- learned reranking or cross-encoder scoring
+- contextual compression before prompt assembly
+- richer failure analysis and tracing
+- more robust ingestion with durable background jobs
+
+## Why It Works As A Portfolio Project
+
+This repo lets me talk concretely about:
+
+- how I separate ingestion from serving
+- how I reason about chunking and retrieval quality
+- how I combine lexical and semantic retrieval
+- how I expose evidence and observability in the UI
+- how I think about local-first trade-offs instead of hiding everything behind managed APIs
+
+That makes it a better engineering portfolio piece than a generic AI demo because the interesting decisions are visible in both the code and the interface.

@@ -1,7 +1,8 @@
 'use client';
 
-import { useCallback, useMemo } from 'react';
+import { useCallback } from 'react';
 import { useStreaming } from '@/hooks/useStreaming';
+import { useAppStore } from '@/store/useAppStore';
 import type { ChatMessage, SourceReference } from '@/types/chat';
 
 function uid() {
@@ -15,26 +16,35 @@ export function useChat(
   activeChatId: string | null,
   selectedDocumentIds: string[],
   messages: ChatMessage[],
-  setMessages: React.Dispatch<React.SetStateAction<ChatMessage[]>>,
+  ensureActiveChat: () => Promise<string>,
 ) {
-  const { isStreaming, streamError, startStreaming, cancelStreaming } = useStreaming();
+  const appendMessages = useAppStore((state) => state.appendMessages);
+  const updateMessage = useAppStore((state) => state.updateMessage);
+  const clearDraft = useAppStore((state) => state.clearDraft);
+
+  const { isStreaming, streamError, pipelineStage, pipelineDebug, startStreaming, cancelStreaming } = useStreaming();
 
   const sendMessage = useCallback(
     async (question: string) => {
       const trimmed = question.trim();
-      if (!trimmed || isStreaming || !activeChatId) return;
+      if (!trimmed || isStreaming) {
+        return;
+      }
+
+      const chatId = activeChatId ?? (await ensureActiveChat());
+      if (!chatId) {
+        return;
+      }
 
       const userMessage: ChatMessage = {
         id: uid(),
         role: 'user',
         content: trimmed,
-        chat_id: activeChatId,
+        chat_id: chatId,
       };
 
       const assistantId = uid();
-
-      setMessages((current) => [
-        ...current,
+      appendMessages(chatId, [
         userMessage,
         {
           id: assistantId,
@@ -42,89 +52,68 @@ export function useChat(
           content: '',
           sources: [],
           isStreaming: true,
-          chat_id: activeChatId,
+          chat_id: chatId,
         },
       ]);
+      clearDraft(chatId);
 
       await startStreaming(
         {
           question: trimmed,
           document_ids: selectedDocumentIds.length ? selectedDocumentIds : null,
-          chat_id: activeChatId,
+          chat_id: chatId,
         },
+        assistantId,
         {
           onToken: (token) => {
-            setMessages((current) =>
-              current.map((message) =>
-                message.id === assistantId
-                  ? {
-                      ...message,
-                      content: `${message.content}${token}`,
-                      isStreaming: true,
-                    }
-                  : message,
-              ),
-            );
+            updateMessage(chatId, assistantId, (message) => ({
+              ...message,
+              content: `${message.content}${token}`,
+              isStreaming: true,
+            }));
           },
-          onSources: (sources: SourceReference[]) => {
-            setMessages((current) =>
-              current.map((message) =>
-                message.id === assistantId
-                  ? {
-                      ...message,
-                      sources,
-                    }
-                  : message,
-              ),
-            );
+          onSources: (sources: SourceReference[], debug) => {
+            updateMessage(chatId, assistantId, (message) => ({
+              ...message,
+              sources,
+              debug: debug ?? message.debug,
+            }));
           },
-          onDone: () => {
-            setMessages((current) =>
-              current.map((message) =>
-                message.id === assistantId
-                  ? {
-                      ...message,
-                      isStreaming: false,
-                    }
-                  : message,
-              ),
-            );
+          onDone: (debug) => {
+            updateMessage(chatId, assistantId, (message) => ({
+              ...message,
+              isStreaming: false,
+              debug: debug ?? message.debug,
+            }));
           },
           onError: (error) => {
-            setMessages((current) =>
-              current.map((message) =>
-                message.id === assistantId
-                  ? {
-                      ...message,
-                      content: message.content || error.message,
-                      error: true,
-                      isStreaming: false,
-                    }
-                  : message,
-              ),
-            );
+            updateMessage(chatId, assistantId, (message) => ({
+              ...message,
+              content: message.content || error.message,
+              error: true,
+              isStreaming: false,
+            }));
           },
         },
       );
     },
-    [activeChatId, isStreaming, selectedDocumentIds, setMessages, startStreaming],
+    [activeChatId, appendMessages, clearDraft, ensureActiveChat, isStreaming, selectedDocumentIds, startStreaming, updateMessage],
   );
 
   const regenerateLast = useCallback(async () => {
-    const lastUser = [...messages].reverse().find((m) => m.role === 'user');
+    const lastUser = [...messages].reverse().find((message) => message.role === 'user');
     if (lastUser) {
       await sendMessage(lastUser.content);
     }
   }, [messages, sendMessage]);
 
-  return useMemo(
-    () => ({
-      isStreaming,
-      streamError,
-      sendMessage,
-      cancelStreaming,
-      regenerateLast,
-    }),
-    [isStreaming, streamError, sendMessage, cancelStreaming, regenerateLast],
-  );
+  return {
+    isStreaming,
+    streamError,
+    pipelineStage,
+    pipelineDebug,
+    sendMessage,
+    cancelStreaming,
+    regenerateLast,
+  };
 }

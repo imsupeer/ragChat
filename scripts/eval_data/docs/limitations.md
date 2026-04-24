@@ -1,0 +1,1 @@
+Current limitations are deliberate. Retrieval is dense-only, there is no reranking, PDF handling does not include OCR, and the ingestion queue runs in-process rather than as a durable external worker.

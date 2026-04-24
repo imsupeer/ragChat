@@ -1,0 +1,1 @@
+Retrieval uses dense similarity search in ChromaDB. The system can restrict search to selected document_ids, then retrieves top_k chunks and truncates again to max_context_chunks before prompt construction. This makes retrieval scope explicit, but the baseline remains dense-only.

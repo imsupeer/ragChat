@@ -1,6 +1,7 @@
 'use client';
 
-import { MessageSquare, Plus, Trash2 } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Check, MessageSquare, Pencil, Plus, Trash2, X } from 'lucide-react';
 import type { ChatSession } from '@/types/chat';
 
 export function ChatSessionList({
@@ -9,45 +10,157 @@ export function ChatSessionList({
   onSelect,
   onCreate,
   onDelete,
+  onRename,
 }: {
   chats: ChatSession[];
   activeChatId: string | null;
   onSelect: (chatId: string) => void;
   onCreate: () => Promise<void>;
   onDelete: (chatId: string) => Promise<void>;
+  onRename: (chatId: string, title: string) => Promise<void>;
 }) {
+  const [editingChatId, setEditingChatId] = useState<string | null>(null);
+  const [draftTitle, setDraftTitle] = useState('');
+  const [savingChatId, setSavingChatId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!editingChatId) {
+      return;
+    }
+
+    const currentChat = chats.find((chat) => chat.id === editingChatId);
+    if (!currentChat) {
+      setEditingChatId(null);
+      setDraftTitle('');
+    }
+  }, [chats, editingChatId]);
+
+  async function handleRename(chatId: string) {
+    const trimmed = draftTitle.trim();
+    if (!trimmed) {
+      return;
+    }
+
+    setSavingChatId(chatId);
+
+    try {
+      await onRename(chatId, trimmed);
+      setEditingChatId(null);
+      setDraftTitle('');
+    } finally {
+      setSavingChatId(null);
+    }
+  }
+
+  function beginEdit(chat: ChatSession) {
+    setEditingChatId(chat.id);
+    setDraftTitle(chat.title);
+  }
+
+  function cancelEdit() {
+    setEditingChatId(null);
+    setDraftTitle('');
+  }
+
   return (
     <div className="space-y-2">
       <button
         type="button"
         onClick={onCreate}
-        className="flex w-full items-center justify-center gap-2 rounded-xl border border-border bg-white/5 px-3 py-2 text-sm transition hover:bg-white/10"
+        className="flex w-full items-center justify-center gap-2 rounded-2xl border border-border bg-white/[0.04] px-3 py-2.5 text-sm transition hover:border-sky-500/30 hover:bg-white/[0.07]"
       >
         <Plus className="h-4 w-4" />
         New Chat
       </button>
 
-      {chats.map((chat) => (
-        <div
-          key={chat.id}
-          className={`flex items-center justify-between gap-2 rounded-xl border p-2 ${
-            activeChatId === chat.id ? 'border-sky-500 bg-sky-500/10' : 'border-border bg-white/5'
-          }`}
-        >
-          <button type="button" onClick={() => onSelect(chat.id)} className="flex min-w-0 flex-1 items-center gap-2 text-left">
-            <MessageSquare className="h-4 w-4 shrink-0" />
-            <span className="truncate text-sm">{chat.title}</span>
-          </button>
+      {chats.map((chat) => {
+        const isActive = activeChatId === chat.id;
+        const isEditing = editingChatId === chat.id;
+        const isSaving = savingChatId === chat.id;
 
-          <button
-            type="button"
-            onClick={() => onDelete(chat.id)}
-            className="rounded-lg p-2 text-gray-400 transition hover:bg-red-500/10 hover:text-red-300"
+        return (
+          <div
+            key={chat.id}
+            className={`rounded-2xl border p-2 transition ${
+              isActive
+                ? 'border-sky-500/40 bg-sky-500/10 shadow-[0_0_0_1px_rgba(56,189,248,0.12)]'
+                : 'border-border bg-white/[0.03] hover:border-white/10'
+            }`}
           >
-            <Trash2 className="h-4 w-4" />
-          </button>
-        </div>
-      ))}
+            {isEditing ? (
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <MessageSquare className="h-4 w-4 shrink-0 text-gray-300" />
+                  <input
+                    autoFocus
+                    value={draftTitle}
+                    onChange={(event) => setDraftTitle(event.target.value)}
+                    onKeyDown={async (event) => {
+                      if (event.key === 'Enter') {
+                        event.preventDefault();
+                        await handleRename(chat.id);
+                      }
+
+                      if (event.key === 'Escape') {
+                        event.preventDefault();
+                        cancelEdit();
+                      }
+                    }}
+                    className="min-w-0 flex-1 rounded-xl border border-border bg-black/20 px-3 py-2 text-sm text-white outline-none focus:border-sky-500/40"
+                  />
+                </div>
+
+                <div className="flex items-center justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={cancelEdit}
+                    className="inline-flex items-center gap-1 rounded-xl border border-border px-2.5 py-1.5 text-xs text-gray-300 transition hover:text-white"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void handleRename(chat.id)}
+                    disabled={!draftTitle.trim() || isSaving}
+                    className="inline-flex items-center gap-1 rounded-xl border border-sky-500/30 bg-sky-500/10 px-2.5 py-1.5 text-xs text-sky-100 transition hover:border-sky-500/50 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <Check className="h-3.5 w-3.5" />
+                    {isSaving ? 'Saving...' : 'Save'}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center justify-between gap-2">
+                <button type="button" onClick={() => onSelect(chat.id)} className="flex min-w-0 flex-1 items-center gap-2 text-left">
+                  <MessageSquare className="h-4 w-4 shrink-0" />
+                  <span className="truncate text-sm">{chat.title}</span>
+                </button>
+
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => beginEdit(chat)}
+                    className="rounded-lg p-2 text-gray-400 transition hover:bg-white/5 hover:text-white"
+                    aria-label={`Rename ${chat.title}`}
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => onDelete(chat.id)}
+                    className="rounded-lg p-2 text-gray-400 transition hover:bg-red-500/10 hover:text-red-300"
+                    aria-label={`Delete ${chat.title}`}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }

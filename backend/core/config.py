@@ -23,6 +23,10 @@ class Settings(BaseSettings):
     chunk_overlap: int = 200
     top_k: int = 5
     max_context_chunks: int = 5
+    enable_hybrid: bool = False
+    enable_reranking: bool = False
+    rerank_top_m: int = 10
+    rerank_top_k: int = 5
 
     model_config = SettingsConfigDict(
         env_file=".env",

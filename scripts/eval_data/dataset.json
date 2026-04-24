@@ -1,0 +1,72 @@
+{
+  "version": 1,
+  "description": "Lightweight fixture-based evaluation set for the local RAG pipeline.",
+  "examples": [
+    {
+      "id": "ingestion-fast-uploads",
+      "question": "How does the system keep uploads fast when indexing may be slow?",
+      "expected_answer": "background queue",
+      "expected_source_chunk_ids": ["architecture_ingestion.md:0"]
+    },
+    {
+      "id": "ingestion-job-store",
+      "question": "Where is the upload job written before background indexing begins?",
+      "expected_answer": "SQLite",
+      "expected_source_chunk_ids": ["architecture_ingestion.md:0"]
+    },
+    {
+      "id": "retrieval-filter",
+      "question": "How can retrieval be restricted to a subset of documents?",
+      "expected_answer": "selected document_ids",
+      "expected_source_chunk_ids": ["retrieval_design.md:0"]
+    },
+    {
+      "id": "retrieval-truncation",
+      "question": "What setting truncates retrieved chunks before prompt construction?",
+      "expected_answer": "max_context_chunks",
+      "expected_source_chunk_ids": ["retrieval_design.md:0"]
+    },
+    {
+      "id": "prompt-missing-answer",
+      "question": "What should the assistant say when the answer is missing from the documents?",
+      "expected_answer": "I could not find the answer in the provided documents.",
+      "expected_source_chunk_ids": ["prompting_strategy.md:0"]
+    },
+    {
+      "id": "prompt-temperature",
+      "question": "What temperature does the chat model use for more deterministic behavior?",
+      "expected_answer": "temperature 0",
+      "expected_source_chunk_ids": ["prompting_strategy.md:0"]
+    },
+    {
+      "id": "persistence-vectors",
+      "question": "Which storage system keeps vectors?",
+      "expected_answer": "ChromaDB",
+      "expected_source_chunk_ids": ["persistence_layout.md:0"]
+    },
+    {
+      "id": "persistence-registry",
+      "question": "Which file stores document registry entries?",
+      "expected_answer": "registry.json",
+      "expected_source_chunk_ids": ["persistence_layout.md:0"]
+    },
+    {
+      "id": "limitations-reranking",
+      "question": "Does the current system use reranking?",
+      "expected_answer": "there is no reranking",
+      "expected_source_chunk_ids": ["limitations.md:0"]
+    },
+    {
+      "id": "limitations-ocr",
+      "question": "Does PDF handling include OCR?",
+      "expected_answer": "does not include OCR",
+      "expected_source_chunk_ids": ["limitations.md:0"]
+    },
+    {
+      "id": "unanswerable-auth",
+      "question": "What authentication mechanism does the system use for multi-user access?",
+      "expected_answer": "I could not find the answer in the provided documents.",
+      "expected_source_chunk_ids": []
+    }
+  ]
+}

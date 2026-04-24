@@ -90,6 +90,16 @@ class SQLiteStore:
             ).fetchone()
             return dict(row) if row else None
 
+    def update_chat_title(self, chat_id: str, title: str) -> Optional[dict[str, Any]]:
+        with self._connect() as conn:
+            conn.execute(
+                "UPDATE chats SET title = ? WHERE id = ?",
+                (title, chat_id),
+            )
+            conn.commit()
+
+        return self.get_chat(chat_id)
+
     def delete_chat(self, chat_id: str) -> None:
         with self._connect() as conn:
             conn.execute("DELETE FROM messages WHERE chat_id = ?", (chat_id,))

@@ -16,7 +16,7 @@ export async function streamChatMessage(
   handlers: {
     onSources?: (event: Extract<StreamEvent, { type: 'sources' }>) => void;
     onToken?: (token: string) => void;
-    onDone?: () => void;
+    onDone?: (event: Extract<StreamEvent, { type: 'done' }>) => void;
     onError?: (error: Error) => void;
   },
   signal?: AbortSignal,
@@ -59,7 +59,7 @@ export async function streamChatMessage(
 
         if (event.type === 'sources') handlers.onSources?.(event);
         if (event.type === 'token') handlers.onToken?.(event.token);
-        if (event.type === 'done') handlers.onDone?.();
+        if (event.type === 'done') handlers.onDone?.(event);
       } catch (error) {
         handlers.onError?.(error as Error);
       }

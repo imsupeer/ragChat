@@ -21,6 +21,16 @@ export function deleteChat(chatId: string) {
   });
 }
 
+export function renameChat(chatId: string, title: string) {
+  return apiFetch<{ chat: ChatSession }>(`/chats/${chatId}`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ title }),
+  });
+}
+
 export function getChatMessages(chatId: string) {
   return apiFetch<{ chat: ChatSession; messages: ChatMessage[] }>(`/chats/${chatId}/messages`);
 }

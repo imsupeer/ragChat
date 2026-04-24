@@ -1,57 +1,100 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { createChat, deleteChat, getChatMessages, listChats } from '@/services/chatSessionService';
-import type { ChatMessage, ChatSession } from '@/types/chat';
+import { useCallback, useEffect, useRef } from 'react';
+import { createChat, deleteChat, getChatMessages, listChats, renameChat } from '@/services/chatSessionService';
+import { useAppStore } from '@/store/useAppStore';
 
 export function useChatSessions() {
-  const [chats, setChats] = useState<ChatSession[]>([]);
-  const [activeChatId, setActiveChatId] = useState<string | null>(null);
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [loadingChats, setLoadingChats] = useState(true);
+  const chats = useAppStore((state) => state.chats);
+  const activeChatId = useAppStore((state) => state.activeChatId);
+  const chatsLoading = useAppStore((state) => state.chatsLoading);
+  const messagesByChat = useAppStore((state) => state.messagesByChat);
+
+  const setChats = useAppStore((state) => state.setChats);
+  const setChatsLoading = useAppStore((state) => state.setChatsLoading);
+  const setActiveChatId = useAppStore((state) => state.setActiveChatId);
+  const setMessages = useAppStore((state) => state.setMessages);
+  const upsertChat = useAppStore((state) => state.upsertChat);
+  const removeChat = useAppStore((state) => state.removeChat);
+
+  const skipNextLoadChatIdRef = useRef<string | null>(null);
 
   const refreshChats = useCallback(async () => {
-    setLoadingChats(true);
-    const data = await listChats();
-    setChats(data.chats);
+    setChatsLoading(true);
 
-    if (!activeChatId && data.chats.length) {
-      setActiveChatId(data.chats[0].id);
+    try {
+      const data = await listChats();
+      setChats(data.chats);
+
+      if (!data.chats.length) {
+        setActiveChatId(null);
+        return;
+      }
+
+      if (!activeChatId || !data.chats.some((chat) => chat.id === activeChatId)) {
+        setActiveChatId(data.chats[0].id);
+      }
+    } finally {
+      setChatsLoading(false);
     }
+  }, [activeChatId, setActiveChatId, setChats, setChatsLoading]);
 
-    setLoadingChats(false);
-  }, [activeChatId]);
+  const loadMessages = useCallback(
+    async (chatId: string) => {
+      const data = await getChatMessages(chatId);
+      setMessages(chatId, data.messages);
+    },
+    [setMessages],
+  );
 
-  const loadMessages = useCallback(async (chatId: string) => {
-    const data = await getChatMessages(chatId);
-    setMessages(data.messages);
-  }, []);
+  const createAndActivateChat = useCallback(async () => {
+    const data = await createChat();
+    skipNextLoadChatIdRef.current = data.chat.id;
+    upsertChat(data.chat);
+    setActiveChatId(data.chat.id);
+    setMessages(data.chat.id, []);
+    return data.chat.id;
+  }, [setActiveChatId, setMessages, upsertChat]);
 
   const handleCreateChat = useCallback(async () => {
-    const data = await createChat();
-    await refreshChats();
-    setActiveChatId(data.chat.id);
-    setMessages([]);
-  }, [refreshChats]);
+    await createAndActivateChat();
+  }, [createAndActivateChat]);
+
+  const ensureActiveChat = useCallback(async () => {
+    if (activeChatId) {
+      return activeChatId;
+    }
+
+    return createAndActivateChat();
+  }, [activeChatId, createAndActivateChat]);
 
   const handleDeleteChat = useCallback(
     async (chatId: string) => {
       await deleteChat(chatId);
+      removeChat(chatId);
+
       const data = await listChats();
       setChats(data.chats);
 
       if (activeChatId === chatId) {
         const nextId = data.chats[0]?.id ?? null;
         setActiveChatId(nextId);
+
         if (nextId) {
           const msgData = await getChatMessages(nextId);
-          setMessages(msgData.messages);
-        } else {
-          setMessages([]);
+          setMessages(nextId, msgData.messages);
         }
       }
     },
-    [activeChatId],
+    [activeChatId, removeChat, setActiveChatId, setChats, setMessages],
+  );
+
+  const handleRenameChat = useCallback(
+    async (chatId: string, title: string) => {
+      const response = await renameChat(chatId, title);
+      upsertChat(response.chat);
+    },
+    [upsertChat],
   );
 
   useEffect(() => {
@@ -59,24 +102,30 @@ export function useChatSessions() {
   }, [refreshChats]);
 
   useEffect(() => {
-    if (activeChatId) {
-      void loadMessages(activeChatId);
+    if (!activeChatId) {
+      return;
     }
+
+    if (skipNextLoadChatIdRef.current === activeChatId) {
+      skipNextLoadChatIdRef.current = null;
+      return;
+    }
+
+    void loadMessages(activeChatId);
   }, [activeChatId, loadMessages]);
 
-  return useMemo(
-    () => ({
-      chats,
-      activeChatId,
-      messages,
-      loadingChats,
-      setActiveChatId,
-      setMessages,
-      refreshChats,
-      loadMessages,
-      handleCreateChat,
-      handleDeleteChat,
-    }),
-    [chats, activeChatId, messages, loadingChats, refreshChats, loadMessages, handleCreateChat, handleDeleteChat],
-  );
+  return {
+    chats,
+    activeChatId,
+    messages: activeChatId ? (messagesByChat[activeChatId] ?? []) : [],
+    loadingChats: chatsLoading,
+    ensureActiveChat,
+    setActiveChatId,
+    setMessages,
+    refreshChats,
+    loadMessages,
+    handleCreateChat,
+    handleDeleteChat,
+    handleRenameChat,
+  };
 }

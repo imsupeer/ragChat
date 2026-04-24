@@ -1,0 +1,1 @@
+Uploads are intentionally decoupled from indexing. The API saves the raw file, writes an upload job to SQLite, and hands the work to a background queue. A worker thread later loads the document, chunks it, creates embeddings, and stores vectors in ChromaDB. This keeps the upload request fast even when indexing is slow.

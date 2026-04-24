@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Dict, Any, List
 from langchain_core.documents import Document
 from ingestion.loaders import load_document
-from ingestion.chunker import build_text_splitter
+from ingestion.chunker import chunk_documents
 
 
 def save_uploaded_file(file_bytes: bytes, filename: str, target_dir: str) -> str:
@@ -38,8 +38,12 @@ def process_document(
     chunk_overlap: int,
 ) -> List[Document]:
     docs = load_document(file_path)
-    splitter = build_text_splitter(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
-    chunks = splitter.split_documents(docs)
+    chunks = chunk_documents(
+        docs=docs,
+        source_path=file_path,
+        chunk_size=chunk_size,
+        chunk_overlap=chunk_overlap,
+    )
 
     for index, chunk in enumerate(chunks):
         chunk.metadata["source"] = original_filename

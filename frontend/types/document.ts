@@ -20,11 +20,17 @@ export type UploadJob = {
 
 export type UploadQueueItem = {
   localId: string;
-  file: File;
+  filename: string;
+  file?: File;
+  fileSize?: number;
   uploadProgress: number;
   indexProgress: number;
   status: 'queued' | 'uploading' | 'processing' | 'completed' | 'failed';
   jobId?: string;
+  documentId?: string | null;
+  storedPath?: string;
+  retryCount: number;
+  source: 'local' | 'recovered';
   error?: string;
 };
 

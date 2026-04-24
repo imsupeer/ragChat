@@ -51,6 +51,10 @@ def get_chat_service() -> ChatService:
         ollama_service=get_ollama_service(),
         top_k=settings.top_k,
         max_context_chunks=settings.max_context_chunks,
+        enable_hybrid=settings.enable_hybrid,
+        enable_reranking=settings.enable_reranking,
+        rerank_top_m=settings.rerank_top_m,
+        rerank_top_k=settings.rerank_top_k,
     )
 
 
