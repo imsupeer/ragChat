@@ -7,12 +7,12 @@ This is not positioned as a SaaS clone or "chat with docs" product. It is a full
 ## Screenshots
 
 <p align="center">
-  <img src="docs/screenshots/workspace-overview.png" alt="Main workspace with chat, documents, pipeline stages, and evidence panel" width="100%" />
+  <img src="assets/screenshots/Screenshot_1.png" alt="Main workspace with chat, documents, pipeline stages, and evidence panel" width="100%" />
 </p>
 
 <p align="center">
-  <img src="docs/screenshots/evidence-panel.png" alt="Evidence workspace showing retrieval diagnostics, timings, and token estimates" width="49%" />
-  <img src="docs/screenshots/upload-and-documents.png" alt="Chat response with indexed documents and source inspection workflow" width="49%" />
+  <img src="assets/screenshots/Screenshot_2.png" alt="Evidence workspace showing retrieval diagnostics, timings, and token estimates" width="49%" />
+  <img src="assets/screenshots/Screenshot_3.png" alt="Chat response with indexed documents and source inspection workflow" width="49%" />
 </p>
 
 ## What This Project Demonstrates
