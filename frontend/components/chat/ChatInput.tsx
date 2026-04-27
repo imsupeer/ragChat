@@ -25,8 +25,14 @@ export function ChatInput({
   async function handleSubmit() {
     const trimmed = value.trim();
     if (!trimmed || disabled) return;
+    const draftBeforeSend = value;
     setDraft(activeChatId, '');
-    await onSend(trimmed);
+    try {
+      await onSend(trimmed);
+    } catch (error) {
+      setDraft(activeChatId, draftBeforeSend);
+      throw error;
+    }
   }
 
   return (

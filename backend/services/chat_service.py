@@ -1,3 +1,4 @@
+import asyncio
 from typing import Optional, List
 from time import perf_counter
 from uuid import uuid4
@@ -135,7 +136,11 @@ class ChatService:
         document_ids: Optional[List[str]] = None,
     ) -> dict:
         request_started = perf_counter()
-        prepared = self.prepare(question=question, document_ids=document_ids)
+        prepared = await asyncio.to_thread(
+            self.prepare,
+            question=question,
+            document_ids=document_ids,
+        )
 
         generation_started = perf_counter()
         answer = await self.ollama_service.generate(prepared["prompt"])

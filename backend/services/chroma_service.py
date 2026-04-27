@@ -124,4 +124,10 @@ class ChromaService:
         return materialized
 
     def delete_document(self, document_id: str) -> None:
-        self._vector_store.delete(where={"document_id": document_id})
+        result = self._vector_store.get(
+            where={"document_id": document_id},
+            include=["metadatas"],
+        )
+        ids = result.get("ids") or []
+        if ids:
+            self._vector_store.delete(ids=ids)

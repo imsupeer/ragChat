@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from core.config import Settings, get_settings
 from core.dependencies import (
@@ -7,6 +8,7 @@ from core.dependencies import (
     get_sqlite_store,
     get_upload_queue_service,
 )
+from ingestion.loaders import SUPPORTED_EXTENSIONS
 from ingestion.processor import save_uploaded_file
 from services.chroma_service import ChromaService
 from services.document_registry import DocumentRegistry
@@ -25,6 +27,13 @@ async def upload_document(
 ):
     if not file.filename:
         raise HTTPException(status_code=400, detail="Filename is required.")
+
+    suffix = Path(file.filename).suffix.lower()
+    if suffix not in SUPPORTED_EXTENSIONS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported file type: {suffix or 'unknown'}.",
+        )
 
     file_bytes = await file.read()
 
@@ -80,7 +89,7 @@ def delete_document(
     chroma_service: ChromaService = Depends(get_chroma_service),
     registry: DocumentRegistry = Depends(get_document_registry),
 ):
-    entry = registry.remove(document_id)
+    entry = registry.get(document_id)
     if not entry:
         raise HTTPException(status_code=404, detail="Document not found.")
 
@@ -89,5 +98,7 @@ def delete_document(
     stored_path = entry.get("stored_path")
     if stored_path and os.path.exists(stored_path):
         os.remove(stored_path)
+
+    registry.remove(document_id)
 
     return {"message": "Document removed successfully.", "document_id": document_id}

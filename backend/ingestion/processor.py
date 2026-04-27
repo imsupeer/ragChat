@@ -9,7 +9,8 @@ from ingestion.chunker import chunk_documents
 
 def save_uploaded_file(file_bytes: bytes, filename: str, target_dir: str) -> str:
     os.makedirs(target_dir, exist_ok=True)
-    safe_name = f"{uuid.uuid4()}_{filename}"
+    basename = Path(filename.replace("\\", "/")).name.strip() or "upload"
+    safe_name = f"{uuid.uuid4()}_{basename}"
     file_path = Path(target_dir) / safe_name
     with open(file_path, "wb") as f:
         f.write(file_bytes)

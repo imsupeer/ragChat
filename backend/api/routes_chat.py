@@ -1,7 +1,8 @@
 import json
+import asyncio
 from typing import Optional, List
 from time import perf_counter
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from core.observability import build_generation_debug, elapsed_ms, log_structured
@@ -18,12 +19,19 @@ class ChatRequest(BaseModel):
     chat_id: Optional[str] = None
 
 
+def ensure_chat_exists(sqlite_store: SQLiteStore, chat_id: Optional[str]) -> None:
+    if chat_id and not sqlite_store.get_chat(chat_id):
+        raise HTTPException(status_code=404, detail="Chat not found.")
+
+
 @router.post("/chat")
 async def chat(
     payload: ChatRequest,
     chat_service: ChatService = Depends(get_chat_service),
     sqlite_store: SQLiteStore = Depends(get_sqlite_store),
 ):
+    ensure_chat_exists(sqlite_store, payload.chat_id)
+
     if payload.chat_id:
         sqlite_store.add_message(
             chat_id=payload.chat_id,
@@ -53,8 +61,11 @@ async def chat_stream(
     chat_service: ChatService = Depends(get_chat_service),
     sqlite_store: SQLiteStore = Depends(get_sqlite_store),
 ):
+    ensure_chat_exists(sqlite_store, payload.chat_id)
+
     request_started = perf_counter()
-    prepared = chat_service.prepare(
+    prepared = await asyncio.to_thread(
+        chat_service.prepare,
         question=payload.question,
         document_ids=payload.document_ids,
     )

@@ -182,7 +182,7 @@ API_PORT=8000
 CORS_ORIGINS=http://localhost:3000
 
 OLLAMA_BASE_URL=http://localhost:11434
-OLLAMA_CHAT_MODEL=llama3.1
+OLLAMA_CHAT_MODEL=llama3.1 or phi3.5
 OLLAMA_EMBED_MODEL=mxbai-embed-large
 
 CHROMA_PERSIST_DIRECTORY=./vector_db

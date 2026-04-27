@@ -2,6 +2,7 @@ import json
 import os
 import sqlite3
 import uuid
+from contextlib import closing
 from typing import Any, Optional
 
 
@@ -13,12 +14,15 @@ class SQLiteStore:
     def _connect(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self.db_path, check_same_thread=False)
         conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA foreign_keys = ON")
         return conn
 
     def _ensure_db(self) -> None:
-        os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
+        directory = os.path.dirname(self.db_path)
+        if directory:
+            os.makedirs(directory, exist_ok=True)
 
-        with self._connect() as conn:
+        with closing(self._connect()) as conn:
             conn.execute(
                 """
                 CREATE TABLE IF NOT EXISTS chats (
@@ -63,7 +67,7 @@ class SQLiteStore:
             conn.commit()
 
     def list_chats(self) -> list[dict[str, Any]]:
-        with self._connect() as conn:
+        with closing(self._connect()) as conn:
             rows = conn.execute(
                 "SELECT id, title, created_at FROM chats ORDER BY created_at DESC"
             ).fetchall()
@@ -73,7 +77,7 @@ class SQLiteStore:
         chat_id = str(uuid.uuid4())
         title = title or "New Chat"
 
-        with self._connect() as conn:
+        with closing(self._connect()) as conn:
             conn.execute(
                 "INSERT INTO chats (id, title) VALUES (?, ?)",
                 (chat_id, title),
@@ -83,7 +87,7 @@ class SQLiteStore:
         return self.get_chat(chat_id)
 
     def get_chat(self, chat_id: str) -> Optional[dict[str, Any]]:
-        with self._connect() as conn:
+        with closing(self._connect()) as conn:
             row = conn.execute(
                 "SELECT id, title, created_at FROM chats WHERE id = ?",
                 (chat_id,),
@@ -91,7 +95,7 @@ class SQLiteStore:
             return dict(row) if row else None
 
     def update_chat_title(self, chat_id: str, title: str) -> Optional[dict[str, Any]]:
-        with self._connect() as conn:
+        with closing(self._connect()) as conn:
             conn.execute(
                 "UPDATE chats SET title = ? WHERE id = ?",
                 (title, chat_id),
@@ -101,13 +105,13 @@ class SQLiteStore:
         return self.get_chat(chat_id)
 
     def delete_chat(self, chat_id: str) -> None:
-        with self._connect() as conn:
+        with closing(self._connect()) as conn:
             conn.execute("DELETE FROM messages WHERE chat_id = ?", (chat_id,))
             conn.execute("DELETE FROM chats WHERE id = ?", (chat_id,))
             conn.commit()
 
     def list_messages(self, chat_id: str) -> list[dict[str, Any]]:
-        with self._connect() as conn:
+        with closing(self._connect()) as conn:
             rows = conn.execute(
                 """
                 SELECT id, chat_id, role, content, sources_json, created_at
@@ -139,7 +143,7 @@ class SQLiteStore:
         message_id = str(uuid.uuid4())
         sources_json = json.dumps(sources or [], ensure_ascii=False)
 
-        with self._connect() as conn:
+        with closing(self._connect()) as conn:
             conn.execute(
                 """
                 INSERT INTO messages (id, chat_id, role, content, sources_json)
@@ -165,7 +169,7 @@ class SQLiteStore:
     ) -> dict[str, Any]:
         job_id = str(uuid.uuid4())
 
-        with self._connect() as conn:
+        with closing(self._connect()) as conn:
             conn.execute(
                 """
                 INSERT INTO upload_jobs (
@@ -180,7 +184,7 @@ class SQLiteStore:
         return self.get_upload_job(job_id)
 
     def list_upload_jobs(self) -> list[dict[str, Any]]:
-        with self._connect() as conn:
+        with closing(self._connect()) as conn:
             rows = conn.execute(
                 """
                 SELECT id, filename, file_size, stored_path, status, upload_progress,
@@ -192,7 +196,7 @@ class SQLiteStore:
             return [dict(row) for row in rows]
 
     def get_upload_job(self, job_id: str) -> Optional[dict[str, Any]]:
-        with self._connect() as conn:
+        with closing(self._connect()) as conn:
             row = conn.execute(
                 """
                 SELECT id, filename, file_size, stored_path, status, upload_progress,
@@ -242,7 +246,7 @@ class SQLiteStore:
 
         values.append(job_id)
 
-        with self._connect() as conn:
+        with closing(self._connect()) as conn:
             conn.execute(
                 f"UPDATE upload_jobs SET {', '.join(fields)} WHERE id = ?",
                 tuple(values),

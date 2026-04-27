@@ -6,7 +6,11 @@ from core.dependencies import get_chat_service, get_sqlite_store
 
 
 class FakeChatService:
+    def __init__(self) -> None:
+        self.ask_calls = []
+
     async def ask(self, question: str, document_ids=None):
+        self.ask_calls.append({"question": question, "document_ids": document_ids})
         return {
             "answer": f"Echo: {question}",
             "sources": [
@@ -45,6 +49,10 @@ class FakeChatService:
 class FakeSQLiteStore:
     def __init__(self) -> None:
         self.messages = []
+        self.chats = {"chat-1": {"id": "chat-1", "title": "Existing Chat"}}
+
+    def get_chat(self, chat_id: str):
+        return self.chats.get(chat_id)
 
     def add_message(self, chat_id: str, role: str, content: str, sources=None):
         record = {
@@ -85,3 +93,28 @@ def test_chat_endpoint_returns_valid_response_and_persists_messages():
         "user",
         "assistant",
     ]
+
+
+def test_chat_endpoint_rejects_missing_chat_id_before_generation():
+    app = FastAPI()
+    app.include_router(chat_router)
+
+    fake_chat_service = FakeChatService()
+    fake_sqlite_store = FakeSQLiteStore()
+
+    app.dependency_overrides[get_chat_service] = lambda: fake_chat_service
+    app.dependency_overrides[get_sqlite_store] = lambda: fake_sqlite_store
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/chat",
+            json={
+                "question": "Will this be generated?",
+                "chat_id": "missing-chat",
+            },
+        )
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Chat not found."
+    assert fake_chat_service.ask_calls == []
+    assert fake_sqlite_store.messages == []
