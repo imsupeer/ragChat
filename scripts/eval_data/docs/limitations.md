@@ -1,1 +1,1 @@
-Current limitations are deliberate. Retrieval is dense-only, there is no reranking, PDF handling does not include OCR, and the ingestion queue runs in-process rather than as a durable external worker.
+Current limitations are deliberate. Dense retrieval is the default baseline. Optional hybrid BM25 retrieval and optional heuristic reranking are available via ENABLE_HYBRID and ENABLE_RERANKING but are off by default. PDF handling does not include OCR, and the ingestion queue runs in-process rather than as a durable external worker.

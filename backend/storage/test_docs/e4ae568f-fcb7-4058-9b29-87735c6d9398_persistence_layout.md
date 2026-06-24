@@ -1,0 +1,1 @@
+Persistence is split by concern. ChromaDB stores vectors, SQLite stores chat history and upload jobs, registry.json stores document registry entries, and the local filesystem stores uploaded source files.

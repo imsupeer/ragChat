@@ -50,6 +50,9 @@ yarn-error.log*
 pnpm-debug.log*
 frontend/.env
 frontend/next-env.d.ts
+frontend/test-results/
+frontend/playwright-report/
+frontend/blob-report/
 
 
 *.log
@@ -68,3 +71,5 @@ tmp/
 temp/
 .cache/
 img/
+tttsss/
+.cursor/

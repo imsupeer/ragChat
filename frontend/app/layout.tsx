@@ -2,8 +2,8 @@ import '@/styles/globals.css';
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'RAG Chat',
-  description: 'Chat with your indexed documents using a local FastAPI + Ollama backend',
+  title: 'Local RAG Workspace',
+  description: 'Local-first RAG workspace with grounded chat, source inspection, and pipeline debug',
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

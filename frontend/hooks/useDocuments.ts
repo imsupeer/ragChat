@@ -1,13 +1,16 @@
 'use client';
 
 import { useCallback, useEffect, useRef } from 'react';
-import { deleteDocument, getUploadJob, listDocuments, listUploadJobs, uploadDocumentWithProgress } from '@/services/documentService';
+import { deleteDocument, getUploadJob, listDocuments, listUploadJobs, retryUploadJob, uploadDocumentWithProgress } from '@/services/documentService';
 import type { UploadQueueItem } from '@/types/document';
 import { useAppStore } from '@/store/useAppStore';
 
 const MAX_PARALLEL_UPLOADS = 2;
 const MAX_UPLOAD_RETRIES = 1;
 const POLL_INTERVAL_MS = 1200;
+const MAX_POLL_DURATION_MS = 10 * 60 * 1000;
+const STALL_UNCHANGED_POLLS = 300;
+const COMPLETED_DISMISS_MS = 5000;
 
 function uid() {
   if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
@@ -24,6 +27,34 @@ function mapJobStatus(status: string): UploadQueueItem['status'] {
   return 'processing';
 }
 
+function withUploadProgressTiming(item: UploadQueueItem, uploadProgress: number): Partial<UploadQueueItem> {
+  const now = Date.now();
+  const uploadStartedAt = item.uploadStartedAt ?? (uploadProgress > 0 ? now : undefined);
+
+  let lastUploadProgress = item.lastUploadProgress;
+  let lastUploadProgressAt = item.lastUploadProgressAt;
+  if (uploadProgress !== item.uploadProgress) {
+    lastUploadProgress = item.uploadProgress;
+    lastUploadProgressAt = now;
+  }
+
+  return { uploadStartedAt, lastUploadProgress, lastUploadProgressAt };
+}
+
+function withIndexProgressTiming(item: UploadQueueItem, indexProgress: number): Partial<UploadQueueItem> {
+  const now = Date.now();
+  const indexingStartedAt = item.indexingStartedAt ?? (indexProgress > 0 ? now : undefined);
+
+  let lastIndexProgress = item.lastIndexProgress;
+  let lastIndexProgressAt = item.lastIndexProgressAt;
+  if (indexProgress !== item.indexProgress) {
+    lastIndexProgress = item.indexProgress;
+    lastIndexProgressAt = now;
+  }
+
+  return { indexingStartedAt, lastIndexProgress, lastIndexProgressAt };
+}
+
 export function useDocuments() {
   const documents = useAppStore((state) => state.documents);
   const loading = useAppStore((state) => state.documentsLoading);
@@ -38,9 +69,11 @@ export function useDocuments() {
   const toggleSelected = useAppStore((state) => state.toggleSelectedDocument);
   const updateUploadQueueItem = useAppStore((state) => state.updateUploadQueueItem);
   const upsertUploadQueueItems = useAppStore((state) => state.upsertUploadQueueItems);
+  const removeUploadQueueItem = useAppStore((state) => state.removeUploadQueueItem);
 
   const inFlightUploadsRef = useRef<Set<string>>(new Set());
   const pollingJobsRef = useRef<Set<string>>(new Set());
+  const completedDismissTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
   const refreshDocuments = useCallback(async () => {
     setDocumentsLoading(true);
@@ -69,10 +102,26 @@ export function useDocuments() {
 
       try {
         let isComplete = false;
+        let lastIndexProgress = -1;
+        let unchangedProgressPolls = 0;
+        const pollStarted = Date.now();
 
         while (!isComplete) {
           const data = await getUploadJob(jobId);
           const job = data.job;
+
+          if (job.index_progress === lastIndexProgress) {
+            unchangedProgressPolls += 1;
+          } else {
+            unchangedProgressPolls = 0;
+            lastIndexProgress = job.index_progress;
+          }
+
+          const stalled =
+            Date.now() - pollStarted > MAX_POLL_DURATION_MS ||
+            (job.status !== 'completed' &&
+              job.status !== 'failed' &&
+              unchangedProgressPolls >= STALL_UNCHANGED_POLLS);
 
           updateUploadQueueItem(localId, (item) => ({
             ...item,
@@ -83,6 +132,9 @@ export function useDocuments() {
             uploadProgress: 100,
             indexProgress: job.index_progress,
             error: job.error ?? undefined,
+            recoverable: job.status === 'failed' && !!job.stored_path,
+            indexingStartedAt: item.indexingStartedAt ?? Date.now(),
+            ...withIndexProgressTiming(item, job.index_progress),
           }));
 
           if (job.status === 'completed') {
@@ -92,6 +144,19 @@ export function useDocuments() {
           }
 
           if (job.status === 'failed') {
+            isComplete = true;
+            continue;
+          }
+
+          if (stalled) {
+            updateUploadQueueItem(localId, (item) => ({
+              ...item,
+              status: 'failed',
+              recoverable: !!item.jobId,
+              error:
+                item.error ||
+                'Indexing stalled. Retry if the saved upload file is still available, or upload the document again.',
+            }));
             isComplete = true;
             continue;
           }
@@ -124,6 +189,7 @@ export function useDocuments() {
         status: 'uploading',
         uploadProgress: Math.max(current.uploadProgress, 1),
         error: undefined,
+        uploadStartedAt: current.uploadStartedAt ?? Date.now(),
       }));
 
       try {
@@ -132,6 +198,8 @@ export function useDocuments() {
             ...current,
             uploadProgress: progress,
             status: progress >= 100 ? 'processing' : 'uploading',
+            ...(progress >= 100 && !current.indexingStartedAt ? { indexingStartedAt: Date.now() } : {}),
+            ...withUploadProgressTiming(current, progress),
           }));
         });
 
@@ -144,6 +212,8 @@ export function useDocuments() {
           indexProgress: response.job.index_progress,
           status: 'processing',
           error: undefined,
+          indexingStartedAt: current.indexingStartedAt ?? Date.now(),
+          ...withIndexProgressTiming(current, response.job.index_progress),
         }));
 
         await pollUploadJob(response.job.id, localId);
@@ -232,6 +302,9 @@ export function useDocuments() {
           retryCount: 0,
           source: 'recovered',
           error: job.error ?? undefined,
+          recoverable: job.status === 'failed' && !!job.stored_path,
+          indexingStartedAt:
+            job.status === 'processing' || job.index_progress > 0 ? Date.now() : undefined,
         }));
 
       if (recoveredItems.length) {
@@ -258,6 +331,41 @@ export function useDocuments() {
   useEffect(() => {
     scheduleQueuedUploads();
   }, [queueItems, scheduleQueuedUploads]);
+
+  useEffect(() => {
+    const timers = completedDismissTimersRef.current;
+    const activeIds = new Set(queueItems.map((item) => item.localId));
+
+    queueItems.forEach((item) => {
+      if (item.status !== 'completed' || timers.has(item.localId)) {
+        return;
+      }
+
+      const timer = setTimeout(() => {
+        removeUploadQueueItem(item.localId);
+        timers.delete(item.localId);
+      }, COMPLETED_DISMISS_MS);
+
+      timers.set(item.localId, timer);
+    });
+
+    for (const [localId, timer] of [...timers.entries()]) {
+      if (!activeIds.has(localId)) {
+        clearTimeout(timer);
+        timers.delete(localId);
+      }
+    }
+  }, [queueItems, removeUploadQueueItem]);
+
+  useEffect(() => {
+    const timers = completedDismissTimersRef.current;
+    return () => {
+      for (const timer of timers.values()) {
+        clearTimeout(timer);
+      }
+      timers.clear();
+    };
+  }, []);
 
   const handleUpload = useCallback(
     async (files: File[]) => {
@@ -296,6 +404,51 @@ export function useDocuments() {
     [refreshDocuments, setDocumentsError],
   );
 
+  const handleRetryJob = useCallback(
+    async (localId: string) => {
+      const item = useAppStore.getState().uploadQueue.find((queueItem) => queueItem.localId === localId);
+      if (!item?.jobId) {
+        return;
+      }
+
+      setDocumentsError(null);
+      updateUploadQueueItem(localId, (current) => ({
+        ...current,
+        status: 'processing',
+        indexProgress: 0,
+        error: undefined,
+        recoverable: false,
+        indexingStartedAt: Date.now(),
+        lastIndexProgress: undefined,
+        lastIndexProgressAt: undefined,
+      }));
+
+      try {
+        const response = await retryUploadJob(item.jobId);
+        updateUploadQueueItem(localId, (current) => ({
+          ...current,
+          jobId: response.job.id,
+          storedPath: response.job.stored_path,
+          status: mapJobStatus(response.job.status),
+          indexProgress: response.job.index_progress,
+          error: response.job.error ?? undefined,
+          recoverable: response.job.status === 'failed',
+          indexingStartedAt: current.indexingStartedAt ?? Date.now(),
+          ...withIndexProgressTiming(current, response.job.index_progress),
+        }));
+        await pollUploadJob(response.job.id, localId);
+      } catch (err) {
+        updateUploadQueueItem(localId, (current) => ({
+          ...current,
+          status: 'failed',
+          recoverable: true,
+          error: err instanceof Error ? err.message : 'Retry failed',
+        }));
+      }
+    },
+    [pollUploadJob, setDocumentsError, updateUploadQueueItem],
+  );
+
   return {
     documents,
     loading,
@@ -305,6 +458,7 @@ export function useDocuments() {
     refreshDocuments,
     handleUpload,
     handleDelete,
+    handleRetryJob,
     toggleSelected,
   };
 }

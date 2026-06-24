@@ -22,6 +22,8 @@ export function ChatSessionList({
   const [editingChatId, setEditingChatId] = useState<string | null>(null);
   const [draftTitle, setDraftTitle] = useState('');
   const [savingChatId, setSavingChatId] = useState<string | null>(null);
+  const [pendingDeleteChatId, setPendingDeleteChatId] = useState<string | null>(null);
+  const [deletingChatId, setDeletingChatId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!editingChatId) {
@@ -34,6 +36,12 @@ export function ChatSessionList({
       setDraftTitle('');
     }
   }, [chats, editingChatId]);
+
+  useEffect(() => {
+    if (pendingDeleteChatId && !chats.some((chat) => chat.id === pendingDeleteChatId)) {
+      setPendingDeleteChatId(null);
+    }
+  }, [chats, pendingDeleteChatId]);
 
   async function handleRename(chatId: string) {
     const trimmed = draftTitle.trim();
@@ -52,9 +60,20 @@ export function ChatSessionList({
     }
   }
 
+  async function handleConfirmDelete(chatId: string) {
+    setDeletingChatId(chatId);
+    try {
+      await onDelete(chatId);
+      setPendingDeleteChatId(null);
+    } finally {
+      setDeletingChatId(null);
+    }
+  }
+
   function beginEdit(chat: ChatSession) {
     setEditingChatId(chat.id);
     setDraftTitle(chat.title);
+    setPendingDeleteChatId(null);
   }
 
   function cancelEdit() {
@@ -67,16 +86,23 @@ export function ChatSessionList({
       <button
         type="button"
         onClick={onCreate}
-        className="flex w-full items-center justify-center gap-2 rounded-2xl border border-border bg-white/[0.04] px-3 py-2.5 text-sm transition hover:border-sky-500/30 hover:bg-white/[0.07]"
+        className="focus-ring flex w-full items-center justify-center gap-2 rounded-2xl border border-border bg-white/[0.04] px-3 py-2.5 text-sm transition hover:border-sky-500/30 hover:bg-white/[0.07]"
       >
         <Plus className="h-4 w-4" />
         New Chat
       </button>
 
+      {!chats.length ? (
+        <p className="px-1 text-xs leading-5 text-gray-500" data-testid="chat-session-empty-state">
+          No chats yet. Start by asking a question after uploading a document.
+        </p>
+      ) : null}
+
       {chats.map((chat) => {
         const isActive = activeChatId === chat.id;
         const isEditing = editingChatId === chat.id;
         const isSaving = savingChatId === chat.id;
+        const isPendingDelete = pendingDeleteChatId === chat.id;
 
         return (
           <div
@@ -130,10 +156,41 @@ export function ChatSessionList({
                   </button>
                 </div>
               </div>
+            ) : isPendingDelete ? (
+              <div className="space-y-2 px-1" role="group" aria-labelledby={`chat-delete-confirm-${chat.id}`}>
+                <p id={`chat-delete-confirm-${chat.id}`} className="text-xs leading-5 text-gray-300" data-testid="chat-delete-confirm">
+                  Delete this chat and its messages?
+                </p>
+                <div className="flex items-center justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setPendingDeleteChatId(null)}
+                    aria-label="Cancel chat deletion"
+                    className="focus-ring inline-flex items-center gap-1 rounded-xl border border-border px-2.5 py-1.5 text-xs text-gray-300 transition hover:text-white"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void handleConfirmDelete(chat.id)}
+                    disabled={deletingChatId === chat.id}
+                    aria-label="Confirm delete chat"
+                    className="focus-ring inline-flex items-center gap-1 rounded-xl border border-red-500/30 bg-red-500/10 px-2.5 py-1.5 text-xs text-red-200 transition hover:border-red-500/50 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {deletingChatId === chat.id ? 'Deleting...' : 'Delete chat'}
+                  </button>
+                </div>
+              </div>
             ) : (
               <div className="flex items-center justify-between gap-2">
-                <button type="button" onClick={() => onSelect(chat.id)} className="flex min-w-0 flex-1 items-center gap-2 text-left">
-                  <MessageSquare className="h-4 w-4 shrink-0" />
+                <button
+                  type="button"
+                  onClick={() => onSelect(chat.id)}
+                  aria-label={`Open chat ${chat.title}`}
+                  aria-current={isActive ? 'true' : undefined}
+                  className="focus-ring flex min-w-0 flex-1 items-center gap-2 rounded-lg text-left"
+                >
+                  <MessageSquare className="h-4 w-4 shrink-0" aria-hidden="true" />
                   <span className="truncate text-sm">{chat.title}</span>
                 </button>
 
@@ -141,7 +198,7 @@ export function ChatSessionList({
                   <button
                     type="button"
                     onClick={() => beginEdit(chat)}
-                    className="rounded-lg p-2 text-gray-400 transition hover:bg-white/5 hover:text-white"
+                    className="focus-ring rounded-lg p-2 text-gray-400 transition hover:bg-white/5 hover:text-white"
                     aria-label={`Rename ${chat.title}`}
                   >
                     <Pencil className="h-4 w-4" />
@@ -149,9 +206,9 @@ export function ChatSessionList({
 
                   <button
                     type="button"
-                    onClick={() => onDelete(chat.id)}
-                    className="rounded-lg p-2 text-gray-400 transition hover:bg-red-500/10 hover:text-red-300"
-                    aria-label={`Delete ${chat.title}`}
+                    onClick={() => setPendingDeleteChatId(chat.id)}
+                    className="focus-ring rounded-lg p-2 text-gray-400 transition hover:bg-red-500/10 hover:text-red-300"
+                    aria-label={`Delete chat ${chat.title}`}
                   >
                     <Trash2 className="h-4 w-4" />
                   </button>

@@ -105,7 +105,7 @@ export const useAppStore = create<AppState>()(
       pipelineDebug: null,
       activeAssistantId: null,
 
-      debugMode: true,
+      debugMode: false,
       drafts: {},
       unsavedDraft: '',
 

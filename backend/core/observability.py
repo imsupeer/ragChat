@@ -9,6 +9,13 @@ from langchain_core.documents import Document
 logger = logging.getLogger("uvicorn.error")
 
 TOKEN_PATTERN = re.compile(r"\w+|[^\w\s]", re.UNICODE)
+WINDOWS_PATH_PATTERN = re.compile(r"[A-Za-z]:\\[^\s\"']+")
+UNC_PATH_PATTERN = re.compile(r"\\\\[^\s\"']+")
+UNIX_PATH_PATTERN = re.compile(r"/(?:Users|home|tmp|var|storage|docs)[^\s\"']*")
+STORAGE_PATH_PATTERN = re.compile(
+    r"[^\s\"']*storage[\\/]docs[\\/][^\s\"']+",
+    re.IGNORECASE,
+)
 INTERNAL_METADATA_KEYS = {
     "_retrieval_score",
     "_retrieval_rank",
@@ -23,6 +30,7 @@ INTERNAL_METADATA_KEYS = {
     "_rerank_score",
     "_rerank_rank",
 }
+DEBUG_REDACTED_METADATA_KEYS = frozenset({"file_path", "stored_path"})
 
 
 def elapsed_ms(start_time: float, end_time: float) -> float:
@@ -49,13 +57,28 @@ def _sanitize_value(value: Any) -> Any:
     return str(value)
 
 
+def redact_local_paths(value: str) -> str:
+    if not value:
+        return value
+
+    redacted = WINDOWS_PATH_PATTERN.sub("[path]", value)
+    redacted = UNC_PATH_PATTERN.sub("[path]", redacted)
+    redacted = UNIX_PATH_PATTERN.sub("[path]", redacted)
+    redacted = STORAGE_PATH_PATTERN.sub("[path]", redacted)
+    return redacted
+
+
 def clean_metadata(metadata: dict[str, Any] | None) -> dict[str, Any]:
     cleaned: dict[str, Any] = {}
 
     for key, value in (metadata or {}).items():
-        if key in INTERNAL_METADATA_KEYS:
+        if key in INTERNAL_METADATA_KEYS or key in DEBUG_REDACTED_METADATA_KEYS:
             continue
-        cleaned[key] = _sanitize_value(value)
+
+        sanitized = _sanitize_value(value)
+        if isinstance(sanitized, str):
+            sanitized = redact_local_paths(sanitized)
+        cleaned[key] = sanitized
 
     return cleaned
 
@@ -171,11 +194,14 @@ def build_prompt_debug(
     context: str,
     used_docs: list[Document],
     latency_ms: float,
+    answer_mode: str = "strict_rag",
 ) -> dict[str, Any]:
     return {
         "latency_ms": latency_ms,
+        "answer_mode": answer_mode,
         "used_chunk_count": len(used_docs),
         "used_chunk_ids": [get_chunk_id(doc) for doc in used_docs if get_chunk_id(doc)],
+        "used_chunks": [build_chunk_debug(doc) for doc in used_docs],
         "context_length_chars": len(context),
         "context_token_estimate": estimate_token_count(context),
         "prompt_length_chars": len(prompt),
@@ -191,6 +217,100 @@ def build_generation_debug(
         "latency_ms": latency_ms,
         "output_length_chars": len(output_text),
         "output_token_estimate": estimate_token_count(output_text),
+    }
+
+
+def safe_user_error_message(exc: Exception, *, fallback: str = "Operation failed.") -> str:
+    message = redact_local_paths(str(exc).strip()) or fallback
+    if len(message) > 200:
+        return fallback
+    if any(
+        indicator in message
+        for indicator in ("Traceback", 'File "', "File '", "[path]")
+    ):
+        return fallback
+    return message
+
+
+def safe_error_message(exc: Exception, *, fallback: str = "Operation failed.") -> str:
+    return safe_user_error_message(exc, fallback=fallback)
+
+
+def safe_generation_error_message(exc: Exception) -> str:
+    return safe_user_error_message(exc, fallback="Generation failed.")
+
+
+def safe_chat_error_message(exc: Exception) -> str:
+    return safe_user_error_message(exc, fallback="Chat request failed.")
+
+
+def safe_ingestion_error_message(exc: Exception) -> str:
+    return safe_user_error_message(exc, fallback="Upload or indexing failed.")
+
+
+def safe_reconciliation_error_message(exc: Exception) -> str:
+    return safe_user_error_message(
+        exc,
+        fallback="Reconciliation report failed to build.",
+    )
+
+
+def log_api_exception(context: str, exc: Exception) -> None:
+    logger.exception("%s failed", context, exc_info=exc)
+
+
+def build_failed_generation_debug(
+    *,
+    model: str,
+    output_text: str,
+    latency_ms: float,
+    error_code: str,
+    error_message: str,
+) -> dict[str, Any]:
+    debug = build_generation_debug(
+        model=model,
+        output_text=output_text,
+        latency_ms=latency_ms,
+    )
+    debug["status"] = "failed"
+    debug["error_code"] = error_code
+    debug["error_message"] = error_message
+    debug["partial_answer"] = bool(output_text)
+    return debug
+
+
+def build_cancelled_generation_debug(
+    *,
+    model: str,
+    output_text: str,
+    latency_ms: float,
+) -> dict[str, Any]:
+    debug = build_generation_debug(
+        model=model,
+        output_text=output_text,
+        latency_ms=latency_ms,
+    )
+    debug["status"] = "client_disconnected"
+    debug["partial_answer"] = bool(output_text)
+    return debug
+
+
+def build_query_rewriting_debug(
+    *,
+    enabled: bool,
+    used: bool,
+    original_question: str,
+    rewritten_query: str,
+    history_turns_used: int,
+    latency_ms: float,
+) -> dict[str, Any]:
+    return {
+        "enabled": enabled,
+        "used": used,
+        "original_question": original_question,
+        "rewritten_query": rewritten_query,
+        "history_turns_used": history_turns_used,
+        "latency_ms": latency_ms,
     }
 
 

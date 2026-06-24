@@ -56,3 +56,9 @@ export function deleteDocument(documentId: string) {
     method: 'DELETE',
   });
 }
+
+export function retryUploadJob(jobId: string) {
+  return apiFetch<{ message: string; job: UploadDocumentResponse['job'] }>(`/documents/jobs/${jobId}/retry`, {
+    method: 'POST',
+  });
+}

@@ -3,6 +3,7 @@ from fastapi.testclient import TestClient
 
 from api.routes_chats import router as chats_router
 from core.dependencies import get_sqlite_store
+from services.sqlite_store import SQLiteStore
 
 
 class FakeSQLiteStore:
@@ -75,3 +76,33 @@ def test_chat_rename_rejects_empty_titles():
 
     assert response.status_code == 400
     assert response.json()["detail"] == "Chat title cannot be empty."
+
+
+def test_list_chat_messages_returns_persisted_debug_metadata(tmp_path):
+    db_path = tmp_path / "app.db"
+    store = SQLiteStore(str(db_path))
+    chat = store.create_chat()
+    store.add_message(chat_id=chat["id"], role="user", content="Question?")
+    store.add_message(
+        chat_id=chat["id"],
+        role="assistant",
+        content="Answer.",
+        sources=[{"chunk_id": "chunk-1"}],
+        debug={
+            "trace_id": "trace-persisted",
+            "prompt": {"used_chunk_count": 1, "used_chunk_ids": ["chunk-1"], "used_chunks": []},
+        },
+    )
+
+    app = FastAPI()
+    app.include_router(chats_router)
+    app.dependency_overrides[get_sqlite_store] = lambda: store
+
+    with TestClient(app) as client:
+        response = client.get(f"/chats/{chat['id']}/messages")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assistant = payload["messages"][-1]
+    assert assistant["role"] == "assistant"
+    assert assistant["debug"]["trace_id"] == "trace-persisted"

@@ -1,19 +1,29 @@
-import os
 from pathlib import Path
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from core.config import Settings, get_settings
 from core.dependencies import (
-    get_chroma_service,
+    get_document_delete_service,
     get_document_registry,
+    get_settings,
     get_sqlite_store,
     get_upload_queue_service,
 )
+from core.observability import log_api_exception, safe_ingestion_error_message
 from ingestion.loaders import SUPPORTED_EXTENSIONS
-from ingestion.processor import save_uploaded_file
-from services.chroma_service import ChromaService
+from ingestion.processor import UploadTooLargeError, stream_upload_to_disk
+from services.metrics import get_local_metrics
+from services.document_delete import (
+    DocumentDeleteError,
+    DocumentDeleteService,
+    DocumentNotFoundError,
+)
 from services.document_registry import DocumentRegistry
 from services.sqlite_store import SQLiteStore
-from services.upload_queue import UploadQueueService
+from services.upload_queue import (
+    UploadJobNotFoundError,
+    UploadJobNotRetryableError,
+    UploadQueueService,
+)
 
 router = APIRouter(prefix="/documents", tags=["documents"])
 
@@ -35,17 +45,41 @@ async def upload_document(
             detail=f"Unsupported file type: {suffix or 'unknown'}.",
         )
 
-    file_bytes = await file.read()
+    get_local_metrics().increment("upload.attempt")
 
-    stored_path = save_uploaded_file(
-        file_bytes=file_bytes,
-        filename=file.filename,
-        target_dir=settings.documents_directory,
-    )
+    try:
+        stored_path, file_size = await stream_upload_to_disk(
+            file,
+            filename=file.filename,
+            target_dir=settings.documents_directory,
+            max_bytes=settings.max_upload_bytes,
+            chunk_bytes=settings.upload_read_chunk_bytes,
+        )
+    except UploadTooLargeError as exc:
+        get_local_metrics().increment("upload.rejected_oversized")
+        raise HTTPException(
+            status_code=413,
+            detail=f"Upload exceeds maximum size of {exc.max_bytes} bytes.",
+        ) from exc
+    except ValueError as exc:
+        get_local_metrics().increment("upload.failed")
+        raise HTTPException(
+            status_code=400,
+            detail=safe_ingestion_error_message(exc),
+        ) from exc
+    except Exception as exc:
+        log_api_exception("documents.upload", exc)
+        get_local_metrics().increment("upload.failed_write")
+        raise HTTPException(
+            status_code=500,
+            detail=safe_ingestion_error_message(exc),
+        ) from exc
+
+    get_local_metrics().increment("upload.accepted")
 
     job = sqlite_store.create_upload_job(
         filename=file.filename,
-        file_size=len(file_bytes),
+        file_size=file_size,
         stored_path=stored_path,
     )
 
@@ -76,6 +110,24 @@ def get_job(job_id: str, sqlite_store: SQLiteStore = Depends(get_sqlite_store)):
     return {"job": job}
 
 
+@router.post("/jobs/{job_id}/retry")
+def retry_upload_job(
+    job_id: str,
+    upload_queue: UploadQueueService = Depends(get_upload_queue_service),
+):
+    try:
+        job = upload_queue.retry_job(job_id)
+    except UploadJobNotFoundError:
+        raise HTTPException(status_code=404, detail="Job not found.")
+    except UploadJobNotRetryableError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    return {
+        "message": "Upload job queued for retry.",
+        "job": job,
+    }
+
+
 @router.get("")
 def list_documents(
     registry: DocumentRegistry = Depends(get_document_registry),
@@ -86,19 +138,11 @@ def list_documents(
 @router.delete("/{document_id}")
 def delete_document(
     document_id: str,
-    chroma_service: ChromaService = Depends(get_chroma_service),
-    registry: DocumentRegistry = Depends(get_document_registry),
+    delete_service: DocumentDeleteService = Depends(get_document_delete_service),
 ):
-    entry = registry.get(document_id)
-    if not entry:
+    try:
+        return delete_service.delete_document(document_id)
+    except DocumentNotFoundError:
         raise HTTPException(status_code=404, detail="Document not found.")
-
-    chroma_service.delete_document(document_id)
-
-    stored_path = entry.get("stored_path")
-    if stored_path and os.path.exists(stored_path):
-        os.remove(stored_path)
-
-    registry.remove(document_id)
-
-    return {"message": "Document removed successfully.", "document_id": document_id}
+    except DocumentDeleteError as exc:
+        raise HTTPException(status_code=500, detail=exc.safe_detail) from exc

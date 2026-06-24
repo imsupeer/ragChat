@@ -13,7 +13,6 @@ export function useStreaming() {
 
   const startStreamLifecycle = useAppStore((state) => state.startStreaming);
   const setPipelineStage = useAppStore((state) => state.setPipelineStage);
-  const setStreamError = useAppStore((state) => state.setStreamError);
   const finishStreaming = useAppStore((state) => state.finishStreaming);
   const resetStreaming = useAppStore((state) => state.resetStreaming);
 
@@ -40,6 +39,13 @@ export function useStreaming() {
       transitionTimeoutRef.current = null;
     }
 
+    const clearTransitionTimeout = () => {
+      if (transitionTimeoutRef.current) {
+        clearTimeout(transitionTimeoutRef.current);
+        transitionTimeoutRef.current = null;
+      }
+    };
+
     try {
       await streamChatMessage(
         payload,
@@ -58,19 +64,13 @@ export function useStreaming() {
             callbacks.onSources(event.sources, event.debug);
           },
           onDone: (event) => {
-            if (transitionTimeoutRef.current) {
-              clearTimeout(transitionTimeoutRef.current);
-              transitionTimeoutRef.current = null;
-            }
+            clearTransitionTimeout();
             finishStreaming(event.debug ?? null);
             callbacks.onDone(event.debug);
           },
           onError: (error) => {
-            if (transitionTimeoutRef.current) {
-              clearTimeout(transitionTimeoutRef.current);
-              transitionTimeoutRef.current = null;
-            }
-            setStreamError(error.message);
+            clearTransitionTimeout();
+            resetStreaming();
             callbacks.onError(error);
           },
         },
@@ -79,11 +79,8 @@ export function useStreaming() {
     } catch (error) {
       const err = error instanceof Error ? error : new Error('Streaming failed');
       if (err.name !== 'AbortError') {
-        if (transitionTimeoutRef.current) {
-          clearTimeout(transitionTimeoutRef.current);
-          transitionTimeoutRef.current = null;
-        }
-        setStreamError(err.message);
+        clearTransitionTimeout();
+        resetStreaming();
         callbacks.onError(err);
       } else {
         resetStreaming();

@@ -26,6 +26,7 @@ export function Sidebar({
   onDeleteChat,
   onRenameChat,
   onSelectChat,
+  onRetryUploadJob,
 }: {
   documents: DocumentItem[];
   loading: boolean;
@@ -41,12 +42,13 @@ export function Sidebar({
   onDeleteChat: (chatId: string) => Promise<void>;
   onRenameChat: (chatId: string, title: string) => Promise<void>;
   onSelectChat: (chatId: string) => void;
+  onRetryUploadJob?: (localId: string) => Promise<void>;
 }) {
   const [queueVisible, setQueueVisible] = useState(true);
   const [documentsVisible, setDocumentsVisible] = useState(true);
 
   return (
-    <aside className="flex h-full w-full flex-col gap-4 overflow-y-auto bg-[linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.015))] p-4">
+    <aside aria-label="Documents and chats" className="flex h-full w-full flex-col gap-4 overflow-y-auto bg-[linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.015))] p-4">
       <div className="rounded-[24px] border border-border bg-black/15 p-4">
         <div className="mb-2 text-sm font-semibold text-white">Chats</div>
         <ChatSessionList
@@ -74,13 +76,15 @@ export function Sidebar({
             <button
               type="button"
               onClick={() => setQueueVisible((current) => !current)}
-              className="inline-flex items-center gap-1 rounded-full border border-border bg-white/[0.03] px-3 py-1 text-xs text-gray-300 transition hover:text-white"
+              aria-expanded={queueVisible}
+              aria-label={queueVisible ? 'Hide upload queue' : 'Show upload queue'}
+              className="focus-ring inline-flex items-center gap-1 rounded-full border border-border bg-white/[0.03] px-3 py-1 text-xs text-gray-300 transition hover:text-white"
             >
               {queueVisible ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
               {queueVisible ? 'Hide' : 'Show'}
             </button>
           </div>
-          {queueVisible ? <UploadQueueList items={queueItems} /> : null}
+          {queueVisible ? <UploadQueueList items={queueItems} onRetry={(localId) => void onRetryUploadJob?.(localId)} /> : null}
         </div>
       ) : null}
 
@@ -94,7 +98,9 @@ export function Sidebar({
             <button
               type="button"
               onClick={() => setDocumentsVisible((current) => !current)}
-              className="inline-flex items-center gap-1 rounded-full border border-border bg-white/[0.03] px-3 py-1 text-xs text-gray-300 transition hover:text-white"
+              aria-expanded={documentsVisible}
+              aria-label={documentsVisible ? 'Hide indexed documents' : 'Show indexed documents'}
+              className="focus-ring inline-flex items-center gap-1 rounded-full border border-border bg-white/[0.03] px-3 py-1 text-xs text-gray-300 transition hover:text-white"
             >
               {documentsVisible ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
               {documentsVisible ? 'Hide' : 'Show'}
@@ -109,7 +115,12 @@ export function Sidebar({
             <Skeleton className="h-20 w-full rounded-2xl" />
           </div>
         ) : (
-          <DocumentList documents={documents} selectedIds={selectedIds} onToggle={onToggleDocument} onDelete={onDeleteDocument} />
+          <>
+            <p className="mb-3 text-xs leading-5 text-gray-500">
+              Select documents to narrow retrieval. Leave none selected to search all indexed documents.
+            </p>
+            <DocumentList documents={documents} selectedIds={selectedIds} onToggle={onToggleDocument} onDelete={onDeleteDocument} />
+          </>
         )}
       </div>
     </aside>

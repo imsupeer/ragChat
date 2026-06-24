@@ -14,7 +14,12 @@ function formatLatency(value?: number) {
 
 type StepStatus = 'pending' | 'active' | 'complete';
 
-function getSummary(stage: PipelineStage, debug: ChatDebugInfo | null, isStreaming: boolean) {
+function getSummary(
+  stage: PipelineStage,
+  debug: ChatDebugInfo | null,
+  isStreaming: boolean,
+  hasDocuments: boolean,
+) {
   if (stage === 'retrieving' && isStreaming) {
     return 'Searching for the most relevant chunks...';
   }
@@ -35,7 +40,11 @@ function getSummary(stage: PipelineStage, debug: ChatDebugInfo | null, isStreami
     return 'Response completed with retrieval and generation diagnostics available.';
   }
 
-  return 'Ask a question to see retrieval, reranking, and generation stages.';
+  if (!hasDocuments) {
+    return 'Upload and index a document to start the RAG pipeline.';
+  }
+
+  return 'Ask a question to retrieve document chunks, generate an answer, and inspect the evidence.';
 }
 
 function StagePill({ label, status, meta }: { label: string; status: StepStatus; meta: string }) {
@@ -48,13 +57,23 @@ function StagePill({ label, status, meta }: { label: string; status: StepStatus;
         status === 'pending' && 'border-border bg-white/[0.03] text-gray-400',
       )}
     >
-      <div className="text-[11px] font-semibold uppercase tracking-[0.18em]">{label}</div>
+      <div className="app-label">{label}</div>
       <div className="mt-1 text-sm">{meta}</div>
     </div>
   );
 }
 
-export function ChatStageIndicator({ isStreaming, stage, debug }: { isStreaming: boolean; stage: PipelineStage; debug: ChatDebugInfo | null }) {
+export function ChatStageIndicator({
+  isStreaming,
+  stage,
+  debug,
+  hasDocuments = false,
+}: {
+  isStreaming: boolean;
+  stage: PipelineStage;
+  debug: ChatDebugInfo | null;
+  hasDocuments?: boolean;
+}) {
   const retrievalStatus: StepStatus =
     stage === 'retrieving' ? 'active' : debug?.retrieval || ['reranking', 'generating', 'complete', 'error'].includes(stage) ? 'complete' : 'pending';
 
@@ -73,8 +92,8 @@ export function ChatStageIndicator({ isStreaming, stage, debug }: { isStreaming:
       <div className="mx-auto max-w-6xl">
         <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
           <div>
-            <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-gray-400">Pipeline</div>
-            <div className="mt-1 text-sm text-gray-200">{getSummary(stage, debug, isStreaming)}</div>
+            <div className="app-label">Pipeline</div>
+            <div className="mt-1 text-sm text-gray-200">{getSummary(stage, debug, isStreaming, hasDocuments)}</div>
           </div>
 
           <div className="grid gap-2 md:grid-cols-3">

@@ -1,8 +1,48 @@
 # Local RAG Workspace
 
-Personal project focused on one problem: how to build a local RAG system that is inspectable, reproducible, and honest about its trade-offs.
+## Project Summary
 
-This is not positioned as a SaaS clone or "chat with docs" product. It is a full-stack engineering project that demonstrates document ingestion, structure-aware chunking, hybrid retrieval, reranking, grounded generation, streaming UX, source attribution, observability, and lightweight evaluation running entirely on local infrastructure.
+**Local RAG Workspace** is a local-first, full-stack RAG portfolio project - an engineering artifact built to show how retrieval-augmented generation works end to end, not a hosted “chat with your docs” product.
+
+| | |
+| --- | --- |
+| **Stack** | FastAPI · Next.js · Ollama · ChromaDB · SQLite |
+| **Purpose** | Inspectable RAG with sources, pipeline stages, and debug traces |
+| **Runtime** | Single-user, runs entirely on your machine |
+
+Upload documents, ask grounded questions, constrain retrieval to selected files, stream answers over SSE, and inspect retrieval scores, reranking, prompt assembly, and generation metadata in the UI. Every major pipeline stage is visible in code and in the **Evidence Workspace** panel.
+
+See [`docs/ENGINEERING_NOTES.md`](docs/ENGINEERING_NOTES.md) for batch-by-batch implementation history and validation commands.
+
+## Engineering Highlights
+
+- **Structure-aware chunking** - Markdown headings, PDF page metadata, section paths on every chunk
+- **Dense retrieval** - semantic search baseline via Ollama embeddings + ChromaDB
+- **Optional hybrid BM25 + RRF** - lexical + dense merge for exact-term and identifier matches
+- **Optional heuristic reranking** - local post-retrieval reordering without a cross-encoder dependency
+- **Strict grounded prompting** - answers must cite retrieved context; explicit refusal when evidence is missing
+- **SSE streaming** - token-by-token generation with structured error events
+- **Upload recovery** - SQLite job queue, startup re-enqueue, Chroma rollback on partial failure, frontend retry
+- **Persisted debug metadata** - retrieval/rerank/prompt/generation debug survives page reload in SQLite
+- **Local eval harness** - fixture dataset, recall@k, offline mode with `--fake-embeddings`
+- **Playwright smoke demo** - one local E2E test for upload → chat → sources → persisted debug (not CI)
+- **Optional multi-turn query rewriting** - chat history rewrites the retrieval query only; final answers stay document-grounded
+
+## Demo Flow
+
+Use this path for interviews, portfolio walkthroughs, or the Playwright smoke test.
+
+1. **Start Ollama** on the host (`ollama serve`) and pull models (e.g. `llama3.2:1b`, `nomic-embed-text`).
+2. **Start the backend** - `uvicorn` on port 8000 or Docker `rag-backend` with `OLLAMA_BASE_URL=http://host.docker.internal:11434`.
+3. **Start the frontend** at `http://localhost:3000` (`npm run dev` or Docker `rag-frontend`).
+4. **Upload a fixture document** - e.g. `scripts/eval_data/docs/limitations.md` from the sidebar uploader.
+5. **Wait for indexing** - upload queue reaches completed; document appears under **Indexed documents**.
+6. **Ask a grounded question** - e.g. *“Does PDF handling include OCR?”* with the document selected.
+7. **Inspect sources and debug** - open **Evidence Workspace → Sources** and **Debug** (retrieval, used-in-prompt chunks, optional query rewrite).
+8. **Reload the page** - confirm chat history and debug metadata persist on the assistant message.
+9. **Run the smoke demo** (optional) - from `frontend/`: `npm run test:e2e` (requires Ollama, backend, and frontend running).
+
+For follow-up rewriting, set `ENABLE_QUERY_REWRITING=true` in `backend/.env`, restart the backend, ask a first question in a chat, then a pronoun-style follow-up (e.g. *“Is it enabled by default?”*) and check **Query Rewriting** in the Debug tab.
 
 ## Screenshots
 
@@ -15,17 +55,6 @@ This is not positioned as a SaaS clone or "chat with docs" product. It is a full
   <img src="assets/screenshots/Screenshot_3.png" alt="Chat response with indexed documents and source inspection workflow" width="49%" />
 </p>
 
-## What This Project Demonstrates
-
-- Full local RAG stack using FastAPI, Next.js, Ollama, ChromaDB, LangChain, SQLite, and Zustand
-- Structure-aware ingestion for PDF, TXT, and Markdown instead of fixed-size splitting only
-- Dense retrieval baseline with optional BM25 lexical retrieval and Reciprocal Rank Fusion
-- Optional post-retrieval reranking to improve final chunk ordering
-- Grounded prompt construction with explicit evidence formatting
-- Streaming answers with source references and debug metadata exposed to the UI
-- Structured observability for retrieval, reranking, prompt building, and generation
-- Lightweight offline evaluation harness for retrieval recall and answer correctness
-
 ## Why I Built It
 
 Most RAG demos stop at "upload a file and ask a question." I wanted a project that was more useful in interviews and more realistic as an engineering artifact:
@@ -34,8 +63,6 @@ Most RAG demos stop at "upload a file and ask a question." I wanted a project th
 - retrieval decisions should be visible and measurable
 - the frontend should show how an answer was built, not just render text
 - the whole system should run locally so infrastructure, latency, and quality trade-offs stay visible
-
-The result is a portfolio project about system design, not just model integration.
 
 ## Architecture
 
@@ -55,12 +82,13 @@ Upload flow
 Question flow
   Next.js
     -> POST /chat or /chat/stream
+    -> optional query rewrite from chat history (retrieval query only)
     -> retrieve dense or hybrid candidates
     -> optional reranking
-    -> build grounded prompt
+    -> build grounded prompt from retrieved chunks + original question
     -> generate with Ollama
     -> stream tokens + sources + debug info
-    -> persist chat history in SQLite
+    -> persist chat history and debug metadata in SQLite
 ```
 
 ## Technical Highlights
@@ -119,16 +147,18 @@ It can measure:
 
 That gives the project a measurable path for comparing chunking, retrieval, and reranking changes.
 
-## Key Engineering Decisions
+## Key Design Decisions
 
 | Decision | Why it was chosen | Trade-off |
 | --- | --- | --- |
-| Use Ollama for chat and embeddings | Keeps the stack fully local and reproducible | Local models are weaker than top hosted models |
-| Split persistence across Chroma, SQLite, JSON, and filesystem | Each concern stays easy to inspect | Consistency has to be managed manually |
-| Use an in-process queue for indexing | Uploads return quickly without extra infrastructure | Jobs are not durable across crashes |
-| Make hybrid retrieval and reranking optional | Baseline behavior stays simple and debuggable | More config branches to reason about |
-| Surface debug metadata in the API and UI | Makes failures easier to diagnose | Adds payload size and implementation complexity |
-| Keep the prompt strict and grounded | Makes hallucinations easier to spot | Missed retrievals produce conservative failures |
+| **Local-first (Ollama + ChromaDB)** instead of hosted LLM/vector DB | Keeps the stack reproducible, inspectable, and free of vendor lock-in for a portfolio artifact | Weaker models and more manual ops than managed APIs |
+| **Split persistence** (Chroma + SQLite + JSON registry + filesystem) | Each store matches its concern and is easy to debug in isolation | No cross-store transactions; consistency is application-managed |
+| **Query rewriting uses history for retrieval only** | Follow-ups can retrieve the right chunks without treating prior assistant text as evidence | Heuristic follow-up detection; extra Ollama call when rewriting |
+| **Final answers grounded only in retrieved context** | Makes hallucinations and missed retrievals visible and testable | Conservative refusals when retrieval misses |
+| **CI/CD intentionally out of scope** | Focus stays on the RAG pipeline; validation is local and scriptable | No automated gates on push/PR today |
+| In-process upload queue | Fast uploads without Redis/SQS | Jobs need SQLite recovery on restart |
+| Optional hybrid + reranking | Simple dense baseline; advanced modes opt-in | More configuration surface |
+| Debug metadata in API and UI | RAG failures become diagnosable in interviews and development | Larger payloads and UI complexity |
 
 ## Current Stack
 
@@ -151,10 +181,16 @@ That gives the project a measurable path for comparing chunking, retrieval, and 
 
 ## Repository Guide
 
+- [`README.md`](../README.md): project summary, demo flow, validation, limitations
+- `docs/ENGINEERING_NOTES.md`: batch history, architecture summary, validation commands
+- `frontend/e2e/smoke-demo.spec.ts`: Playwright portfolio smoke test
 - `scripts/eval.py`: lightweight evaluation harness
+- `scripts/validate.ps1` / `scripts/validate.sh`: local quality gate scripts
 - `tests/`: focused pytest suite across API, ingestion, retrieval, and prompt logic
 
 ## Local Development
+
+For a guided walkthrough, see [Demo Flow](#demo-flow) above.
 
 ### Prerequisites
 
@@ -182,7 +218,7 @@ API_PORT=8000
 CORS_ORIGINS=http://localhost:3000
 
 OLLAMA_BASE_URL=http://localhost:11434
-OLLAMA_CHAT_MODEL=llama3.1 or phi3.5
+OLLAMA_CHAT_MODEL=llama3.1
 OLLAMA_EMBED_MODEL=mxbai-embed-large
 
 CHROMA_PERSIST_DIRECTORY=./vector_db
@@ -198,7 +234,48 @@ ENABLE_HYBRID=true
 ENABLE_RERANKING=true
 RERANK_TOP_M=10
 RERANK_TOP_K=5
+ENABLE_QUERY_REWRITING=false
+QUERY_REWRITE_HISTORY_TURNS=4
+ANSWER_MODE=strict_rag
+
+MAX_UPLOAD_BYTES=52428800
+UPLOAD_READ_CHUNK_BYTES=1048576
+CLEANUP_FAILED_UPLOAD_FILES=true
+
+RECONCILE_ON_STARTUP=true
+RECONCILE_REPAIR_ON_STARTUP=false
+RECONCILE_ALLOW_STALE_REGISTRY_REPAIR=false
+
+OTEL_ENABLED=false
+OTEL_SERVICE_NAME=local-rag-workspace
 ```
+
+Diagnostic endpoints (local only):
+
+- `GET /health` — process liveness
+- `GET /health/ready` — dependency readiness (`ok`, `degraded`, or `error`)
+- `GET /debug/reconciliation` — persistence drift report (read-only)
+- `POST /debug/reconciliation/repair` — repair plan (dry-run by default; set `"dry_run": false` to apply safe fixes)
+- `GET /debug/metrics` — in-process counters (resets on restart)
+
+**Backend validation (no frontend, no Ollama by default):**
+
+```bash
+python scripts/validate_backend.py
+```
+
+Normal unit tests do not require Ollama. Eval with `--fake-embeddings` is offline and deterministic. Live upload harness tests are opt-in:
+
+```bash
+RUN_LIVE_TESTS=true python -m pytest tests/live/
+```
+
+`ANSWER_MODE` controls how the model uses retrieved documents versus general knowledge:
+
+- **`strict_rag`** (default): answers use only retrieved document context; the model must not use prior knowledge. Best for evidence-sensitive Q&A, document review, and evals.
+- **`hybrid_assistant`**: retrieved documents are the highest-priority source, but the model may add general knowledge when context is empty, incomplete, or irrelevant. Output separates **Document Evidence** from **General Knowledge Used**; general knowledge is never cited as document evidence. For document-specific questions (“according to the uploaded file”), behavior falls back to strict grounding.
+
+Optional multi-turn query rewriting (`ENABLE_QUERY_REWRITING=true`) uses recent chat history only to build a standalone retrieval query for follow-up questions. In `strict_rag` mode, the final answer prompt still uses retrieved document context as the only evidence; prior assistant answers are never injected as facts.
 
 Run:
 
@@ -234,46 +311,99 @@ docker compose up --build
 
 The current Docker setup still expects Ollama to be running locally and reachable from the backend container.
 
-## Verification
+For Docker, set in `backend/.env`:
 
-From the repo root:
+```env
+OLLAMA_BASE_URL=http://host.docker.internal:11434
+```
+
+Use `http://localhost:11434` when running the backend directly on the host.
+
+## Validation
+
+Core checks from the repo root (backend venv activated):
 
 ```bash
 python -m pytest
+python scripts/eval.py --skip-generation --fake-embeddings --report-md tttsss/eval_report.md
+cd frontend && npm run build
+cd frontend && npm run test:e2e
 ```
 
-From `frontend/`:
+Recommended local validation (deterministic, no Ollama):
 
 ```bash
-npm run build
+python scripts/eval.py --skip-generation --fake-embeddings --report-md tttsss/eval_report.md
 ```
 
-Optional retrieval evaluation:
+This writes a Markdown evaluation report you can share as a portfolio artifact. The report includes summary metrics, active configuration (including answer mode and query rewriting), dataset overview, per-example retrieval results, failed cases, and notes about fake embeddings vs full Ollama eval.
+
+| Command | What it verifies |
+| --- | --- |
+| `python -m pytest` | API, ingestion, retrieval, upload recovery, query rewrite, SQLite debug persistence |
+| `python scripts/eval.py --skip-generation --fake-embeddings` | Retrieval recall@k on fixture docs (no Ollama embeddings) |
+| `python scripts/eval.py --skip-generation --fake-embeddings --report-md tttsss/eval_report.md` | Same as above plus a Markdown report artifact |
+| `cd frontend && npm run build` | Next.js production build and TypeScript |
+| `cd frontend && npm run test:e2e` | Local Playwright suite (requires Ollama, backend, frontend on `localhost:3000`) |
+| `cd frontend && npm run test:e2e:headed` | Same tests with visible browser |
+| `cd frontend && npm run test:e2e:ui` | Playwright UI mode (local debugging) |
+
+### Eval report vs full eval
+
+- **Fake embeddings + skip-generation** — deterministic offline validation; no Ollama required. Best for CI-style checks and the Markdown report.
+- **Full eval** — requires Ollama with the configured embed and chat models pulled; generation output may vary by model.
+
+`tttsss/eval_report.md` is a local generated artifact and can be regenerated at any time. If `tttsss/` is gitignored, the report is not necessarily committed.
+
+One-command shortcut:
+
+```bash
+# Windows
+powershell -ExecutionPolicy Bypass -File scripts/validate.ps1
+
+# macOS/Linux
+bash scripts/validate.sh
+```
+
+Full eval with Ollama generation (optional):
 
 ```bash
 python scripts/eval.py --skip-generation
 python scripts/eval.py
 ```
 
-## Limitations
+E2E prerequisites: Ollama on the host, backend on `:8000`, frontend on `http://localhost:3000`. First run: `npx playwright install chromium` from `frontend/`. Playwright reuses a running dev server when present. Tests are **local-only** (no CI/CD): `smoke-demo` (full portfolio path), `empty-state` (first-run guidance), `chat-actions` (accessible message controls), `mobile-evidence-panel` (tablet drawer). See [Demo Flow](#demo-flow) for the manual walkthrough.
 
-This project is intentionally strong as a portfolio artifact because the limitations are visible rather than hidden.
+### Ollama and URL notes
 
-- The ingestion worker is in-process and not durable across backend restarts
-- BM25 is rebuilt on demand instead of maintained as a dedicated lexical index
-- Reranking is heuristic rather than model-based
-- PDF handling is text extraction only and not layout-aware
-- Persistence is split across several local stores without cross-store transactions
-- The evaluation harness is small and heuristic, not a full benchmark suite
-- The project is local-first and single-user; it does not try to solve auth, multitenancy, or hosted operations
+| Runtime | Backend `OLLAMA_BASE_URL` | Frontend URL | Notes |
+| --- | --- | --- | --- |
+| Backend on host (`uvicorn`) | `http://localhost:11434` | `http://localhost:3000` | Default local development |
+| Backend in Docker | `http://host.docker.internal:11434` | `http://localhost:3000` | Ollama runs on the host |
+| Browser access | n/a | use `http://localhost:3000` | Avoid `127.0.0.1:3000` unless `CORS_ORIGINS` includes it |
 
-## Where I Would Take It Next
+If eval or chat fail with connection errors while Docker is running, check that the backend is not still pointing at `host.docker.internal` when you run tools directly on the host.
 
-- stronger retrieval evaluation with a larger gold dataset
-- learned reranking or cross-encoder scoring
-- contextual compression before prompt assembly
-- richer failure analysis and tracing
-- more robust ingestion with durable background jobs
+## Limitations and Future Work
+
+Current boundaries (intentionally visible, not hidden):
+
+- **No authentication or multi-tenancy** - single-user local workspace only
+- **No OCR or layout-aware PDF parsing** - text extraction via PyPDF only
+- **Heuristic follow-up detection** for query rewriting - pronoun/prefix patterns, not a classifier
+- **BM25 rebuilt per query** - opportunity for caching or a dedicated lexical index at scale
+- **In-process ingestion worker** - not a durable external queue
+- **Heuristic reranking** - not a learned cross-encoder
+- **Split persistence without distributed transactions** - Chroma, SQLite, registry, filesystem
+- **Small eval harness** - fixture-based, not a production benchmark suite
+- **No production deployment hardening** - secrets, scaling, monitoring, and CI/CD left for a product phase
+
+Reasonable next steps:
+
+- larger gold eval dataset and learned reranking
+- BM25 index caching and contextual compression before prompt assembly
+- durable background jobs and richer tracing
+- CI for pytest, frontend build, offline eval, and optional E2E
 
 ## Why It Works As A Portfolio Project
 

@@ -1,1 +1,1 @@
-The prompt is intentionally conservative. It tells the model to use only the provided context, say "I could not find the answer in the provided documents." when evidence is missing, and keep answers precise. The chat model runs with temperature 0 for more deterministic behavior.
+The prompt is intentionally conservative. It tells the model to use only the provided context, say "The provided context does not contain enough information to answer this." when evidence is missing, and keep answers precise. The chat model runs with temperature 0 for more deterministic behavior.

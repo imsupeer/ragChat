@@ -38,6 +38,7 @@ export type ChatMessage = {
   debug?: ChatDebugInfo;
   isStreaming?: boolean;
   error?: boolean;
+  errorMessage?: string;
   created_at?: string;
 };
 
@@ -51,6 +52,7 @@ export type ChatRequest = {
   question: string;
   document_ids?: string[] | null;
   chat_id?: string | null;
+  regenerate?: boolean;
 };
 
 export type RetrievalResultDebug = {
@@ -91,6 +93,8 @@ export type ChatDebugInfo = {
     document_ids: string[];
     retrieved_count: number;
     used_count: number;
+    candidate_count?: number;
+    query?: string;
     results: RetrievalResultDebug[];
   };
   reranking?: {
@@ -105,8 +109,10 @@ export type ChatDebugInfo = {
   };
   prompt?: {
     latency_ms: number;
+    answer_mode?: 'strict_rag' | 'hybrid_assistant' | string;
     used_chunk_count: number;
     used_chunk_ids: string[];
+    used_chunks?: RetrievalResultDebug[];
     context_length_chars: number;
     context_token_estimate: number;
     prompt_length_chars: number;
@@ -119,6 +125,14 @@ export type ChatDebugInfo = {
     output_token_estimate: number;
   };
   total_latency_ms?: number;
+  query_rewriting?: {
+    enabled: boolean;
+    used: boolean;
+    original_question: string;
+    rewritten_query: string;
+    history_turns_used: number;
+    latency_ms: number;
+  };
 };
 
 export type ChatResponse = {
@@ -130,4 +144,5 @@ export type ChatResponse = {
 export type StreamEvent =
   | { type: 'sources'; sources: SourceReference[]; debug?: ChatDebugInfo }
   | { type: 'token'; token: string }
-  | { type: 'done'; debug?: ChatDebugInfo };
+  | { type: 'done'; debug?: ChatDebugInfo }
+  | { type: 'error'; message: string; code?: string; recoverable?: boolean };

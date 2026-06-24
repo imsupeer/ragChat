@@ -9,12 +9,16 @@ export function ChatInput({
   onCancel,
   disabled,
   isStreaming,
+  streamErrorId,
+  hasStreamError,
 }: {
   activeChatId: string | null;
   onSend: (value: string) => Promise<void>;
   onCancel: () => void;
   disabled?: boolean;
   isStreaming: boolean;
+  streamErrorId?: string;
+  hasStreamError?: boolean;
 }) {
   const drafts = useAppStore((state) => state.drafts);
   const unsavedDraft = useAppStore((state) => state.unsavedDraft);
@@ -39,6 +43,7 @@ export function ChatInput({
     <div className="border-t border-border bg-bg/80 px-4 py-4 backdrop-blur">
       <div className="mx-auto flex max-w-4xl items-end gap-3 rounded-3xl border border-border bg-panel px-4 py-3 shadow-lg">
         <textarea
+          data-testid="chat-composer"
           value={value}
           onChange={(event) => setDraft(activeChatId, event.target.value)}
           onKeyDown={async (event) => {
@@ -50,6 +55,8 @@ export function ChatInput({
           rows={1}
           placeholder="Ask about your documents..."
           aria-label="Message composer"
+          aria-invalid={hasStreamError ? true : undefined}
+          aria-describedby={hasStreamError && streamErrorId ? streamErrorId : undefined}
           className="max-h-48 min-h-[28px] flex-1 resize-none bg-transparent text-sm text-white outline-none placeholder:text-gray-500"
         />
 
@@ -57,18 +64,22 @@ export function ChatInput({
           <button
             type="button"
             onClick={onCancel}
-            className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-red-500/20 text-red-300 transition hover:bg-red-500/30"
+            aria-label="Stop generation"
+            className="focus-ring inline-flex h-10 w-10 items-center justify-center rounded-full bg-red-500/20 text-red-300 transition hover:bg-red-500/30"
           >
-            <Square className="h-4 w-4 fill-current" />
+            <Square className="h-4 w-4 fill-current" aria-hidden="true" />
           </button>
         ) : (
           <button
             type="button"
+            data-testid="chat-send"
             onClick={handleSubmit}
             disabled={disabled || !value.trim()}
-            className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-white text-black transition hover:bg-gray-200 disabled:cursor-not-allowed disabled:opacity-40"
+            aria-label="Send message"
+            aria-disabled={disabled || !value.trim() ? true : undefined}
+            className="focus-ring inline-flex h-10 w-10 items-center justify-center rounded-full bg-white text-black transition hover:bg-gray-200 disabled:cursor-not-allowed disabled:opacity-40"
           >
-            <SendHorizonal className="h-4 w-4" />
+            <SendHorizonal className="h-4 w-4" aria-hidden="true" />
           </button>
         )}
       </div>

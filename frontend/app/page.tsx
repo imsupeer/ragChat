@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { ChatContainer } from '@/components/chat/ChatContainer';
 import { ChatEmptyState } from '@/components/chat/ChatEmptyState';
@@ -8,7 +8,7 @@ import { ChatInput } from '@/components/chat/ChatInput';
 import { ChatStageIndicator } from '@/components/chat/ChatStageIndicator';
 import { Header } from '@/components/layout/Header';
 import { Sidebar } from '@/components/layout/Sidebar';
-import { InsightPanel } from '@/components/panels/InsightPanel';
+import { EvidencePanelShell } from '@/components/panels/EvidencePanelShell';
 import { useChat } from '@/hooks/useChat';
 import { useChatSessions } from '@/hooks/useChatSessions';
 import { useDocuments } from '@/hooks/useDocuments';
@@ -41,10 +41,10 @@ export default function HomePage() {
   const [panelTab, setPanelTab] = useState<'sources' | 'debug'>('sources');
   const [selectedMessageId, setSelectedMessageId] = useState<string | null>(null);
 
-  const { documents, loading, error, selectedIds, queueItems, handleUpload, handleDelete, toggleSelected } = useDocuments();
+  const { documents, loading, error, selectedIds, queueItems, handleUpload, handleDelete, handleRetryJob, toggleSelected } = useDocuments();
   const { chats, activeChatId, messages, loadingChats, ensureActiveChat, setActiveChatId, handleCreateChat, handleDeleteChat, handleRenameChat } =
     useChatSessions();
-  const { isStreaming, streamError, pipelineStage, pipelineDebug, sendMessage, cancelStreaming, regenerateLast } = useChat(
+  const { isStreaming, streamError, pipelineStage, pipelineDebug, sendMessage, cancelStreaming, regenerateAssistant } = useChat(
     activeChatId,
     selectedIds,
     messages,
@@ -53,6 +53,24 @@ export default function HomePage() {
 
   const debugMode = useAppStore((state) => state.debugMode);
   const setDebugMode = useAppStore((state) => state.setDebugMode);
+  const panelToggleRef = useRef<HTMLButtonElement>(null);
+
+  const closePanel = useCallback(() => {
+    setPanelOpen(false);
+    if (typeof window !== 'undefined' && window.matchMedia('(max-width: 1279px)').matches) {
+      panelToggleRef.current?.focus();
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    if (window.matchMedia('(max-width: 1279px)').matches) {
+      setPanelOpen(false);
+    }
+  }, []);
 
   function startResize(event: React.MouseEvent<HTMLDivElement>) {
     event.preventDefault();
@@ -84,6 +102,24 @@ export default function HomePage() {
 
   const selectedQuestion = useMemo(() => findAssistantQuestion(messages, selectedAssistantMessage?.id ?? null), [messages, selectedAssistantMessage]);
 
+  const hasDocuments = documents.length > 0;
+  const hasActiveUploads = queueItems.some((item) => ['queued', 'uploading', 'processing'].includes(item.status));
+
+  function handleSelectChat(chatId: string) {
+    if (chatId === activeChatId) {
+      return;
+    }
+
+    if (isStreaming) {
+      const confirmed = window.confirm('Generation is still running. Switch chats and cancel it?');
+      if (!confirmed) {
+        return;
+      }
+    }
+
+    setActiveChatId(chatId);
+  }
+
   useEffect(() => {
     if (!messages.length) {
       setSelectedMessageId(null);
@@ -103,7 +139,7 @@ export default function HomePage() {
       <div className="flex h-full">
         {sidebarVisible ? (
           <>
-            <div className="h-full border-r border-border" style={{ width: sidebarWidth }}>
+            <div id="app-sidebar" className="h-full border-r border-border" style={{ width: sidebarWidth }}>
               <Sidebar
                 documents={documents}
                 loading={loading}
@@ -114,27 +150,38 @@ export default function HomePage() {
                 activeChatId={activeChatId}
                 onUpload={handleUpload}
                 onDeleteDocument={handleDelete}
+                onRetryUploadJob={handleRetryJob}
                 onToggleDocument={toggleSelected}
                 onCreateChat={handleCreateChat}
                 onDeleteChat={handleDeleteChat}
                 onRenameChat={handleRenameChat}
-                onSelectChat={setActiveChatId}
+                onSelectChat={handleSelectChat}
               />
             </div>
 
-            <div onMouseDown={startResize} className="w-1 cursor-col-resize bg-border/30 transition hover:bg-sky-500" />
+            <div
+              role="separator"
+              aria-orientation="vertical"
+              aria-label="Resize sidebar. Pointer only — drag to adjust width."
+              title="Drag to resize sidebar (pointer only)"
+              onMouseDown={startResize}
+              className="w-1 cursor-col-resize bg-border/30 transition hover:bg-sky-500"
+            />
           </>
         ) : null}
 
-        <section className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        <section aria-label="Chat workspace" className="flex min-h-0 flex-1 flex-col overflow-hidden">
           <div className="border-b border-border px-4 py-4">
             <div className="mx-auto flex max-w-6xl items-start gap-3">
               <button
                 type="button"
                 onClick={() => setSidebarVisible((current) => !current)}
-                className="mt-1 rounded-xl border border-border bg-white/[0.04] p-2 transition hover:bg-white/[0.08]"
+                aria-label="Toggle sidebar"
+                aria-expanded={sidebarVisible}
+                aria-controls="app-sidebar"
+                className="focus-ring mt-1 rounded-xl border border-border bg-white/[0.04] p-2 transition hover:bg-white/[0.08]"
               >
-                {sidebarVisible ? <PanelLeftClose className="h-5 w-5" /> : <PanelLeftOpen className="h-5 w-5" />}
+                {sidebarVisible ? <PanelLeftClose className="h-5 w-5" aria-hidden="true" /> : <PanelLeftOpen className="h-5 w-5" aria-hidden="true" />}
               </button>
 
               <div className="min-w-0 flex-1">
@@ -144,6 +191,7 @@ export default function HomePage() {
                   activeSourceCount={selectedAssistantMessage?.sources?.length ?? 0}
                   debugMode={debugMode}
                   panelOpen={panelOpen}
+                  panelToggleRef={panelToggleRef}
                   onToggleDebugMode={() => setDebugMode(!debugMode)}
                   onTogglePanel={() => setPanelOpen((current) => !current)}
                 />
@@ -151,21 +199,27 @@ export default function HomePage() {
             </div>
           </div>
 
-          <ChatStageIndicator isStreaming={isStreaming} stage={pipelineStage} debug={pipelineDebug} />
+          <ChatStageIndicator isStreaming={isStreaming} stage={pipelineStage} debug={pipelineDebug} hasDocuments={hasDocuments} />
 
           <div className="flex min-h-0 flex-1">
             <div className="flex min-h-0 min-w-0 flex-1 flex-col">
               <ChatContainer
                 messages={messages}
                 streamError={streamError}
-                onRegenerate={regenerateLast}
+                onRegenerate={regenerateAssistant}
                 onInspectMessage={(messageId) => {
                   setSelectedMessageId(messageId);
                   setPanelOpen(true);
                 }}
                 selectedMessageId={selectedAssistantMessage?.id ?? null}
                 isLoading={loadingChats}
-                emptyState={<ChatEmptyState hasDocuments={documents.length > 0} onSuggestionSelect={sendMessage} />}
+                emptyState={
+                  <ChatEmptyState
+                    hasDocuments={hasDocuments}
+                    hasActiveUploads={hasActiveUploads}
+                    onSuggestionSelect={sendMessage}
+                  />
+                }
               />
 
               <ChatInput
@@ -174,47 +228,25 @@ export default function HomePage() {
                 onCancel={cancelStreaming}
                 disabled={loadingChats}
                 isStreaming={isStreaming}
+                streamErrorId="chat-stream-error"
+                hasStreamError={Boolean(streamError && !messages.some((message) => message.errorMessage))}
               />
             </div>
 
-            {panelOpen ? (
-              <div className="hidden h-full w-[380px] shrink-0 xl:block">
-                <InsightPanel
-                  panelTab={panelTab}
-                  onTabChange={setPanelTab}
-                  debugMode={debugMode}
-                  onToggleDebugMode={setDebugMode}
-                  message={selectedAssistantMessage}
-                  question={selectedQuestion}
-                  className="h-full min-h-0"
-                />
-              </div>
-            ) : null}
-          </div>
-        </section>
-      </div>
-
-      {panelOpen ? (
-        <>
-          <button
-            type="button"
-            aria-label="Close evidence panel"
-            onClick={() => setPanelOpen(false)}
-            className="fixed inset-0 z-40 bg-black/50 xl:hidden"
-          />
-          <div className="fixed inset-y-0 right-0 z-50 w-full max-w-sm xl:hidden">
-            <InsightPanel
+            <EvidencePanelShell
+              open={panelOpen}
+              onClose={closePanel}
               panelTab={panelTab}
               onTabChange={setPanelTab}
               debugMode={debugMode}
               onToggleDebugMode={setDebugMode}
               message={selectedAssistantMessage}
               question={selectedQuestion}
-              className="min-h-full"
+              panelToggleRef={panelToggleRef}
             />
           </div>
-        </>
-      ) : null}
+        </section>
+      </div>
     </main>
   );
 }

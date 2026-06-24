@@ -1,8 +1,10 @@
 from typing import List, Optional
 from uuid import uuid4
+
 from langchain_chroma import Chroma
 from langchain_core.documents import Document
-from retrieval.bm25 import BM25Index
+
+from retrieval.lexical_cache import LexicalSearchCache
 
 
 class ChromaService:
@@ -15,10 +17,14 @@ class ChromaService:
             persist_directory=self.persist_directory,
             embedding_function=self.embedding_function,
         )
+        self._lexical_cache = LexicalSearchCache()
 
     @property
     def vector_store(self) -> Chroma:
         return self._vector_store
+
+    def get_last_lexical_cache_stats(self) -> dict[str, object]:
+        return dict(self._lexical_cache.last_stats)
 
     def add_documents(self, document_id: str, docs: List[Document]) -> None:
         ids = [str(uuid4()) for _ in docs]
@@ -28,6 +34,7 @@ class ChromaService:
             doc.metadata["chunk_id"] = chunk_id
 
         self._vector_store.add_documents(documents=docs, ids=ids)
+        self._lexical_cache.invalidate()
 
     def similarity_search(
         self,
@@ -68,12 +75,27 @@ class ChromaService:
         k: int = 5,
         document_ids: Optional[List[str]] = None,
     ) -> List[Document]:
-        docs = self.list_documents(document_ids=document_ids)
-        if not docs:
+        results, _stats = self._lexical_cache.search(
+            query=query,
+            k=k,
+            document_ids=document_ids,
+            load_corpus=lambda: self.list_documents(document_ids=None),
+        )
+        metrics = None
+        try:
+            from services.metrics import get_local_metrics
+
+            metrics = get_local_metrics()
+            if _stats.get("cache_hit"):
+                metrics.increment("retrieval.lexical.cache_hit")
+            else:
+                metrics.increment("retrieval.lexical.cache_miss")
+        except Exception:
+            pass
+
+        if not results:
             return []
 
-        bm25 = BM25Index(docs)
-        results = bm25.search(query=query, k=k)
         ranked_docs: List[Document] = []
 
         for rank, (doc, score) in enumerate(results, start=1):
@@ -131,3 +153,22 @@ class ChromaService:
         ids = result.get("ids") or []
         if ids:
             self._vector_store.delete(ids=ids)
+        self._lexical_cache.invalidate()
+
+    def list_document_ids_with_vector_counts(self) -> dict[str, int]:
+        try:
+            result = self._vector_store.get(include=["metadatas"])
+        except TypeError:
+            result = self._vector_store._collection.get(include=["metadatas"])
+
+        counts: dict[str, int] = {}
+        for metadata in result.get("metadatas") or []:
+            if not metadata:
+                continue
+            document_id = metadata.get("document_id")
+            if not document_id:
+                continue
+            document_key = str(document_id)
+            counts[document_key] = counts.get(document_key, 0) + 1
+
+        return counts

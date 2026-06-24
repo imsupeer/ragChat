@@ -32,6 +32,13 @@ export type UploadQueueItem = {
   retryCount: number;
   source: 'local' | 'recovered';
   error?: string;
+  recoverable?: boolean;
+  uploadStartedAt?: number;
+  indexingStartedAt?: number;
+  lastUploadProgress?: number;
+  lastUploadProgressAt?: number;
+  lastIndexProgress?: number;
+  lastIndexProgressAt?: number;
 };
 
 export type UploadDocumentResponse = {

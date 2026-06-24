@@ -1,6 +1,12 @@
 from functools import lru_cache
 from typing import List
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+from prompts.rag_prompt import ANSWER_MODES
+
+DEFAULT_MAX_UPLOAD_BYTES = 52_428_800
+DEFAULT_UPLOAD_READ_CHUNK_BYTES = 1_048_576
 
 
 class Settings(BaseSettings):
@@ -27,12 +33,43 @@ class Settings(BaseSettings):
     enable_reranking: bool = False
     rerank_top_m: int = 10
     rerank_top_k: int = 5
+    enable_query_rewriting: bool = False
+    query_rewrite_history_turns: int = 4
+    query_rewrite_model: str | None = None
+    answer_mode: str = "strict_rag"
+
+    max_upload_bytes: int = DEFAULT_MAX_UPLOAD_BYTES
+    upload_read_chunk_bytes: int = DEFAULT_UPLOAD_READ_CHUNK_BYTES
+    cleanup_failed_upload_files: bool = True
+
+    reconcile_on_startup: bool = True
+    reconcile_repair_on_startup: bool = False
+    reconcile_allow_stale_registry_repair: bool = False
+
+    otel_enabled: bool = False
+    otel_service_name: str = "local-rag-workspace"
 
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
         case_sensitive=False,
     )
+
+    @field_validator("answer_mode")
+    @classmethod
+    def validate_answer_mode(cls, value: str) -> str:
+        normalized = (value or "strict_rag").strip().lower()
+        if normalized not in ANSWER_MODES:
+            allowed = ", ".join(sorted(ANSWER_MODES))
+            raise ValueError(f"ANSWER_MODE must be one of: {allowed}")
+        return normalized
+
+    @field_validator("max_upload_bytes", "upload_read_chunk_bytes")
+    @classmethod
+    def validate_positive_byte_settings(cls, value: int) -> int:
+        if value <= 0:
+            raise ValueError("Byte size settings must be positive.")
+        return value
 
     @property
     def cors_origins_list(self) -> List[str]:
