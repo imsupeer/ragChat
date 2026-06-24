@@ -95,8 +95,12 @@ def test_readiness_service_marks_sqlite_error(tmp_path):
 def test_readiness_service_ollama_degraded_without_network_call(tmp_path):
     from core.config import Settings
     from services.metrics import LocalMetrics
+    from services.model_catalog import load_model_catalog
+    from services.model_runtime import ModelRuntimeService
+    from services.model_settings import ModelSettingsService
     from services.readiness import ReadinessService
     from services.sqlite_store import SQLiteStore
+    from tests.services.test_model_runtime import FakeOllamaRuntime
 
     class FakeChroma:
         def list_document_ids_with_vector_counts(self):
@@ -107,19 +111,30 @@ def test_readiness_service_ollama_degraded_without_network_call(tmp_path):
         def is_worker_alive(self) -> bool:
             return True
 
+    settings_service = ModelSettingsService(
+        settings_path=str(tmp_path / "model_settings.json"),
+        default_chat_model="llama3.1:8b",
+        installed_models_provider=lambda: [],
+        catalog_loader=load_model_catalog,
+    )
+    runtime = ModelRuntimeService(
+        ollama_service=FakeOllamaRuntime(reachable=False),
+        model_settings=settings_service,
+        keep_alive="5m",
+    )
+
     service = ReadinessService(
-        settings=Settings(
-            sqlite_path=str(tmp_path / "app.db"),
-            ollama_base_url="http://127.0.0.1:1",
-        ),
+        settings=Settings(sqlite_path=str(tmp_path / "app.db")),
         sqlite_store=SQLiteStore(str(tmp_path / "app.db")),
         chroma_service=FakeChroma(),
         upload_queue=FakeQueue(),
         metrics=LocalMetrics(),
+        model_runtime=runtime,
     )
 
-    with patch("services.readiness.urllib.request.urlopen", side_effect=OSError("down")):
-        report = service.check()
+    report = service.check()
 
     assert report["checks"]["ollama"]["status"] == "degraded"
+    assert report["checks"]["ollama"]["reachable"] is False
+    assert report["checks"]["ollama"]["active_chat_model"] == "llama3.1:8b"
     assert report["status"] == "degraded"

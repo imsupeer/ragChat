@@ -140,6 +140,7 @@ async def iter_chat_stream_events(
                 model=chat_service.ollama_service.model,
                 output_text=full_answer,
                 latency_ms=elapsed_ms(generation_started, generation_finished),
+                keep_alive=chat_service.ollama_service.keep_alive,
             )
             log_structured(
                 "rag.generation.cancelled",
@@ -173,6 +174,7 @@ async def iter_chat_stream_events(
             model=chat_service.ollama_service.model,
             output_text=full_answer,
             latency_ms=elapsed_ms(generation_started, generation_finished),
+            keep_alive=chat_service.ollama_service.keep_alive,
         )
         generation_debug["status"] = "completed"
         log_structured("rag.generation", prepared["trace_id"], generation_debug)
@@ -242,6 +244,7 @@ async def iter_chat_stream_events(
             latency_ms=generation_latency_ms,
             error_code=error_code,
             error_message=safe_message,
+            keep_alive=chat_service.ollama_service.keep_alive,
         )
         debug = {
             **prepared["debug"],

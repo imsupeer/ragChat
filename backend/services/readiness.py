@@ -1,17 +1,14 @@
 import logging
-import urllib.error
-import urllib.request
 from typing import Any
 
 from core.config import Settings
 from services.chroma_service import ChromaService
 from services.metrics import LocalMetrics
+from services.model_runtime import ModelRuntimeService
 from services.sqlite_store import SQLiteStore
 from services.upload_queue import UploadQueueService
 
 logger = logging.getLogger("uvicorn.error")
-
-OLLAMA_CHECK_TIMEOUT_SECONDS = 2.0
 
 
 class ReadinessService:
@@ -23,12 +20,14 @@ class ReadinessService:
         chroma_service: ChromaService,
         upload_queue: UploadQueueService,
         metrics: LocalMetrics,
+        model_runtime: ModelRuntimeService | None = None,
     ) -> None:
         self.settings = settings
         self.sqlite_store = sqlite_store
         self.chroma_service = chroma_service
         self.upload_queue = upload_queue
         self.metrics = metrics
+        self.model_runtime = model_runtime
 
     def check(self) -> dict[str, Any]:
         checks: dict[str, dict[str, Any]] = {}
@@ -47,6 +46,7 @@ class ReadinessService:
         else:
             overall = "ok"
 
+        self.metrics.increment("models.runtime.status")
         return {"status": overall, "checks": checks}
 
     def _check_sqlite(self) -> dict[str, Any]:
@@ -95,26 +95,19 @@ class ReadinessService:
         return check
 
     def _check_ollama(self) -> dict[str, Any]:
-        url = f"{self.settings.ollama_base_url.rstrip('/')}/api/tags"
-        request = urllib.request.Request(url, method="GET")
-
-        try:
-            with urllib.request.urlopen(
-                request,
-                timeout=OLLAMA_CHECK_TIMEOUT_SECONDS,
-            ) as response:
-                if response.status == 200:
-                    return {"status": "ok"}
-        except (urllib.error.URLError, TimeoutError, OSError) as exc:
-            logger.info("Readiness Ollama check unavailable: %s", exc)
-            return {
-                "status": "degraded",
-                "message": "Ollama unavailable",
-            }
-        except Exception as exc:
-            logger.warning("Readiness Ollama check failed: %s", exc)
+        if self.model_runtime is not None:
+            try:
+                return self.model_runtime.readiness_summary()
+            except Exception as exc:
+                logger.warning("Readiness model runtime check failed: %s", exc)
+                return {
+                    "status": "degraded",
+                    "reachable": False,
+                    "message": "Ollama unavailable",
+                }
 
         return {
             "status": "degraded",
-            "message": "Ollama unavailable",
+            "reachable": False,
+            "message": "Ollama runtime status unavailable",
         }

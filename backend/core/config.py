@@ -17,13 +17,23 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:3000"
 
     ollama_base_url: str = "http://localhost:11434"
-    ollama_chat_model: str = "llama3.1"
+    ollama_chat_model: str = "llama3.1:8b"
     ollama_embed_model: str = "mxbai-embed-large"
+    ollama_keep_alive: str = "5m"
+    ollama_preload_timeout_seconds: float = 30.0
+    ollama_tags_timeout_seconds: float = 2.0
+    ollama_ps_timeout_seconds: float = 2.0
+
+    hardware_telemetry_enabled: bool = True
+    hardware_telemetry_timeout_seconds: float = 2.0
+    hardware_telemetry_poll_seconds: float = 5.0
+    hardware_telemetry_gpu_provider: str = "auto"
 
     chroma_persist_directory: str = "./vector_db"
     documents_directory: str = "./storage/docs"
     registry_path: str = "./storage/registry.json"
     sqlite_path: str = "./storage/app.db"
+    model_settings_path: str = "./storage/model_settings.json"
 
     chunk_size: int = 800
     chunk_overlap: int = 200
@@ -36,6 +46,7 @@ class Settings(BaseSettings):
     enable_query_rewriting: bool = False
     query_rewrite_history_turns: int = 4
     query_rewrite_model: str | None = None
+    use_chat_model_for_query_rewrite: bool = False
     answer_mode: str = "strict_rag"
 
     max_upload_bytes: int = DEFAULT_MAX_UPLOAD_BYTES
@@ -53,6 +64,7 @@ class Settings(BaseSettings):
         env_file=".env",
         env_file_encoding="utf-8",
         case_sensitive=False,
+        protected_namespaces=("settings_",),
     )
 
     @field_validator("answer_mode")
@@ -70,6 +82,38 @@ class Settings(BaseSettings):
         if value <= 0:
             raise ValueError("Byte size settings must be positive.")
         return value
+
+    @field_validator("ollama_preload_timeout_seconds", "ollama_tags_timeout_seconds", "ollama_ps_timeout_seconds", "hardware_telemetry_timeout_seconds")
+    @classmethod
+    def validate_positive_ollama_timeouts(cls, value: float) -> float:
+        if value <= 0:
+            raise ValueError("Ollama timeout settings must be positive.")
+        return value
+
+    @field_validator("ollama_keep_alive")
+    @classmethod
+    def validate_keep_alive(cls, value: str) -> str:
+        normalized = (value or "5m").strip()
+        if not normalized:
+            raise ValueError("OLLAMA_KEEP_ALIVE must not be empty.")
+        return normalized
+
+    @field_validator("hardware_telemetry_poll_seconds")
+    @classmethod
+    def validate_positive_poll_seconds(cls, value: float) -> float:
+        if value <= 0:
+            raise ValueError("Hardware telemetry poll interval must be positive.")
+        return value
+
+    @field_validator("hardware_telemetry_gpu_provider")
+    @classmethod
+    def validate_gpu_provider(cls, value: str) -> str:
+        normalized = (value or "auto").strip().lower()
+        allowed = {"auto", "nvidia", "amd", "disabled"}
+        if normalized not in allowed:
+            allowed_list = ", ".join(sorted(allowed))
+            raise ValueError(f"HARDWARE_TELEMETRY_GPU_PROVIDER must be one of: {allowed_list}")
+        return normalized
 
     @property
     def cors_origins_list(self) -> List[str]:

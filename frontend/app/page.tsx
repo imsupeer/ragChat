@@ -12,6 +12,9 @@ import { EvidencePanelShell } from '@/components/panels/EvidencePanelShell';
 import { useChat } from '@/hooks/useChat';
 import { useChatSessions } from '@/hooks/useChatSessions';
 import { useDocuments } from '@/hooks/useDocuments';
+import { useModelSettings } from '@/hooks/useModelSettings';
+import { useModelRuntime } from '@/hooks/useModelRuntime';
+import { useHardwareTelemetry } from '@/hooks/useHardwareTelemetry';
 import { useAppStore } from '@/store/useAppStore';
 import type { ChatMessage } from '@/types/chat';
 
@@ -50,6 +53,31 @@ export default function HomePage() {
     messages,
     ensureActiveChat,
   );
+  const {
+    settings: modelSettings,
+    loading: modelSettingsLoading,
+    error: modelSettingsError,
+    actionMessage: modelActionMessage,
+    applyChatModel,
+    resetChatModel,
+  } = useModelSettings();
+  const {
+    runtime: modelRuntime,
+    loading: modelRuntimeLoading,
+    error: modelRuntimeError,
+    actionMessage: modelRuntimeActionMessage,
+    actionLoading: modelRuntimeActionLoading,
+    refresh: refreshModelRuntime,
+    preload: preloadActiveModel,
+    unload: unloadActiveModel,
+  } = useModelRuntime({ enablePolling: sidebarVisible });
+  const {
+    telemetry: hardwareTelemetry,
+    loading: hardwareTelemetryLoading,
+    error: hardwareTelemetryError,
+    refresh: refreshHardwareTelemetry,
+    refreshSilent: refreshHardwareTelemetrySilent,
+  } = useHardwareTelemetry({ enablePolling: sidebarVisible });
 
   const debugMode = useAppStore((state) => state.debugMode);
   const setDebugMode = useAppStore((state) => state.setDebugMode);
@@ -148,6 +176,37 @@ export default function HomePage() {
                 queueItems={queueItems}
                 chats={chats}
                 activeChatId={activeChatId}
+                isStreaming={isStreaming}
+                modelSettings={modelSettings}
+                modelSettingsLoading={modelSettingsLoading}
+                modelSettingsError={modelSettingsError}
+                modelActionMessage={modelActionMessage}
+                modelRuntime={modelRuntime}
+                modelRuntimeLoading={modelRuntimeLoading}
+                modelRuntimeError={modelRuntimeError}
+                modelRuntimeActionMessage={modelRuntimeActionMessage}
+                modelRuntimeActionLoading={modelRuntimeActionLoading}
+                onApplyChatModel={async (chatModel) => {
+                  await applyChatModel(chatModel);
+                  await refreshModelRuntime();
+                }}
+                onResetChatModel={async () => {
+                  await resetChatModel();
+                  await refreshModelRuntime();
+                }}
+                onRefreshModelRuntime={refreshModelRuntime}
+                onPreloadActiveModel={async () => {
+                  await preloadActiveModel();
+                  await refreshHardwareTelemetrySilent();
+                }}
+                onUnloadActiveModel={async () => {
+                  await unloadActiveModel();
+                  await refreshHardwareTelemetrySilent();
+                }}
+                hardwareTelemetry={hardwareTelemetry}
+                hardwareTelemetryLoading={hardwareTelemetryLoading}
+                hardwareTelemetryError={hardwareTelemetryError}
+                onRefreshHardwareTelemetry={refreshHardwareTelemetry}
                 onUpload={handleUpload}
                 onDeleteDocument={handleDelete}
                 onRetryUploadJob={handleRetryJob}
@@ -162,7 +221,7 @@ export default function HomePage() {
             <div
               role="separator"
               aria-orientation="vertical"
-              aria-label="Resize sidebar. Pointer only — drag to adjust width."
+              aria-label="Resize sidebar. Pointer only - drag to adjust width."
               title="Drag to resize sidebar (pointer only)"
               onMouseDown={startResize}
               className="w-1 cursor-col-resize bg-border/30 transition hover:bg-sky-500"
@@ -181,7 +240,11 @@ export default function HomePage() {
                 aria-controls="app-sidebar"
                 className="focus-ring mt-1 rounded-xl border border-border bg-white/[0.04] p-2 transition hover:bg-white/[0.08]"
               >
-                {sidebarVisible ? <PanelLeftClose className="h-5 w-5" aria-hidden="true" /> : <PanelLeftOpen className="h-5 w-5" aria-hidden="true" />}
+                {sidebarVisible ? (
+                  <PanelLeftClose className="h-5 w-5" aria-hidden="true" />
+                ) : (
+                  <PanelLeftOpen className="h-5 w-5" aria-hidden="true" />
+                )}
               </button>
 
               <div className="min-w-0 flex-1">
@@ -189,6 +252,10 @@ export default function HomePage() {
                   documentCount={documents.length}
                   selectedDocumentCount={selectedIds.length}
                   activeSourceCount={selectedAssistantMessage?.sources?.length ?? 0}
+                  chatModel={modelSettings?.chat_model ?? null}
+                  modelRuntime={modelRuntime}
+                  modelRuntimeLoading={modelRuntimeLoading}
+                  onRefreshModelRuntime={refreshModelRuntime}
                   debugMode={debugMode}
                   panelOpen={panelOpen}
                   panelToggleRef={panelToggleRef}
@@ -213,13 +280,7 @@ export default function HomePage() {
                 }}
                 selectedMessageId={selectedAssistantMessage?.id ?? null}
                 isLoading={loadingChats}
-                emptyState={
-                  <ChatEmptyState
-                    hasDocuments={hasDocuments}
-                    hasActiveUploads={hasActiveUploads}
-                    onSuggestionSelect={sendMessage}
-                  />
-                }
+                emptyState={<ChatEmptyState hasDocuments={hasDocuments} hasActiveUploads={hasActiveUploads} onSuggestionSelect={sendMessage} />}
               />
 
               <ChatInput

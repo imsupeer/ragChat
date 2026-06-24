@@ -210,14 +210,21 @@ def build_prompt_debug(
 
 
 def build_generation_debug(
-    model: str, output_text: str, latency_ms: float
+    model: str,
+    output_text: str,
+    latency_ms: float,
+    *,
+    keep_alive: str | None = None,
 ) -> dict[str, Any]:
-    return {
+    debug = {
         "model": model,
         "latency_ms": latency_ms,
         "output_length_chars": len(output_text),
         "output_token_estimate": estimate_token_count(output_text),
     }
+    if keep_alive is not None:
+        debug["keep_alive"] = keep_alive
+    return debug
 
 
 def safe_user_error_message(exc: Exception, *, fallback: str = "Operation failed.") -> str:
@@ -266,11 +273,13 @@ def build_failed_generation_debug(
     latency_ms: float,
     error_code: str,
     error_message: str,
+    keep_alive: str | None = None,
 ) -> dict[str, Any]:
     debug = build_generation_debug(
         model=model,
         output_text=output_text,
         latency_ms=latency_ms,
+        keep_alive=keep_alive,
     )
     debug["status"] = "failed"
     debug["error_code"] = error_code
@@ -284,11 +293,13 @@ def build_cancelled_generation_debug(
     model: str,
     output_text: str,
     latency_ms: float,
+    keep_alive: str | None = None,
 ) -> dict[str, Any]:
     debug = build_generation_debug(
         model=model,
         output_text=output_text,
         latency_ms=latency_ms,
+        keep_alive=keep_alive,
     )
     debug["status"] = "client_disconnected"
     debug["partial_answer"] = bool(output_text)

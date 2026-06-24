@@ -12,6 +12,7 @@ from core.dependencies import get_chat_service, get_sqlite_store
 class FakeOllamaService:
     def __init__(self, tokens=None, fail=False):
         self.model = "test-model"
+        self.keep_alive = "5m"
         self.tokens = tokens or ["Hello", " world"]
         self.fail = fail
 

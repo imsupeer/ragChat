@@ -7,7 +7,9 @@ from api.routes_chat import router as chat_router
 from api.routes_chats import router as chats_router
 from api.routes_debug import router as debug_router
 from api.routes_documents import router as documents_router
+from api.routes_hardware import router as hardware_router
 from api.routes_health import router as health_router
+from api.routes_models import router as models_router
 from core.config import get_settings
 from core.dependencies import (
     get_reconciliation_service,
@@ -77,6 +79,8 @@ app.include_router(chat_router)
 app.include_router(chats_router)
 app.include_router(debug_router)
 app.include_router(health_router)
+app.include_router(hardware_router)
+app.include_router(models_router)
 
 
 @app.get("/health")

@@ -6,7 +6,7 @@ import type { PipelineStage } from '@/store/useAppStore';
 
 function formatLatency(value?: number) {
   if (value == null) {
-    return '—';
+    return '-';
   }
 
   return `${Math.round(value)} ms`;
@@ -14,12 +14,7 @@ function formatLatency(value?: number) {
 
 type StepStatus = 'pending' | 'active' | 'complete';
 
-function getSummary(
-  stage: PipelineStage,
-  debug: ChatDebugInfo | null,
-  isStreaming: boolean,
-  hasDocuments: boolean,
-) {
+function getSummary(stage: PipelineStage, debug: ChatDebugInfo | null, isStreaming: boolean, hasDocuments: boolean) {
   if (stage === 'retrieving' && isStreaming) {
     return 'Searching for the most relevant chunks...';
   }

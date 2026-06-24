@@ -4,11 +4,11 @@
 
 **Local RAG Workspace** is a local-first, full-stack RAG portfolio project - an engineering artifact built to show how retrieval-augmented generation works end to end, not a hosted “chat with your docs” product.
 
-| | |
-| --- | --- |
-| **Stack** | FastAPI · Next.js · Ollama · ChromaDB · SQLite |
+|             |                                                                 |
+| ----------- | --------------------------------------------------------------- |
+| **Stack**   | FastAPI · Next.js · Ollama · ChromaDB · SQLite                  |
 | **Purpose** | Inspectable RAG with sources, pipeline stages, and debug traces |
-| **Runtime** | Single-user, runs entirely on your machine |
+| **Runtime** | Single-user, runs entirely on your machine                      |
 
 Upload documents, ask grounded questions, constrain retrieval to selected files, stream answers over SSE, and inspect retrieval scores, reranking, prompt assembly, and generation metadata in the UI. Every major pipeline stage is visible in code and in the **Evidence Workspace** panel.
 
@@ -37,12 +37,12 @@ Use this path for interviews, portfolio walkthroughs, or the Playwright smoke te
 3. **Start the frontend** at `http://localhost:3000` (`npm run dev` or Docker `rag-frontend`).
 4. **Upload a fixture document** - e.g. `scripts/eval_data/docs/limitations.md` from the sidebar uploader.
 5. **Wait for indexing** - upload queue reaches completed; document appears under **Indexed documents**.
-6. **Ask a grounded question** - e.g. *“Does PDF handling include OCR?”* with the document selected.
+6. **Ask a grounded question** - e.g. _“Does PDF handling include OCR?”_ with the document selected.
 7. **Inspect sources and debug** - open **Evidence Workspace → Sources** and **Debug** (retrieval, used-in-prompt chunks, optional query rewrite).
 8. **Reload the page** - confirm chat history and debug metadata persist on the assistant message.
 9. **Run the smoke demo** (optional) - from `frontend/`: `npm run test:e2e` (requires Ollama, backend, and frontend running).
 
-For follow-up rewriting, set `ENABLE_QUERY_REWRITING=true` in `backend/.env`, restart the backend, ask a first question in a chat, then a pronoun-style follow-up (e.g. *“Is it enabled by default?”*) and check **Query Rewriting** in the Debug tab.
+For follow-up rewriting, set `ENABLE_QUERY_REWRITING=true` in `backend/.env`, restart the backend, ask a first question in a chat, then a pronoun-style follow-up (e.g. _“Is it enabled by default?”_) and check **Query Rewriting** in the Debug tab.
 
 ## Screenshots
 
@@ -149,16 +149,16 @@ That gives the project a measurable path for comparing chunking, retrieval, and 
 
 ## Key Design Decisions
 
-| Decision | Why it was chosen | Trade-off |
-| --- | --- | --- |
-| **Local-first (Ollama + ChromaDB)** instead of hosted LLM/vector DB | Keeps the stack reproducible, inspectable, and free of vendor lock-in for a portfolio artifact | Weaker models and more manual ops than managed APIs |
-| **Split persistence** (Chroma + SQLite + JSON registry + filesystem) | Each store matches its concern and is easy to debug in isolation | No cross-store transactions; consistency is application-managed |
-| **Query rewriting uses history for retrieval only** | Follow-ups can retrieve the right chunks without treating prior assistant text as evidence | Heuristic follow-up detection; extra Ollama call when rewriting |
-| **Final answers grounded only in retrieved context** | Makes hallucinations and missed retrievals visible and testable | Conservative refusals when retrieval misses |
-| **CI/CD intentionally out of scope** | Focus stays on the RAG pipeline; validation is local and scriptable | No automated gates on push/PR today |
-| In-process upload queue | Fast uploads without Redis/SQS | Jobs need SQLite recovery on restart |
-| Optional hybrid + reranking | Simple dense baseline; advanced modes opt-in | More configuration surface |
-| Debug metadata in API and UI | RAG failures become diagnosable in interviews and development | Larger payloads and UI complexity |
+| Decision                                                             | Why it was chosen                                                                              | Trade-off                                                       |
+| -------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| **Local-first (Ollama + ChromaDB)** instead of hosted LLM/vector DB  | Keeps the stack reproducible, inspectable, and free of vendor lock-in for a portfolio artifact | Weaker models and more manual ops than managed APIs             |
+| **Split persistence** (Chroma + SQLite + JSON registry + filesystem) | Each store matches its concern and is easy to debug in isolation                               | No cross-store transactions; consistency is application-managed |
+| **Query rewriting uses history for retrieval only**                  | Follow-ups can retrieve the right chunks without treating prior assistant text as evidence     | Heuristic follow-up detection; extra Ollama call when rewriting |
+| **Final answers grounded only in retrieved context**                 | Makes hallucinations and missed retrievals visible and testable                                | Conservative refusals when retrieval misses                     |
+| **CI/CD intentionally out of scope**                                 | Focus stays on the RAG pipeline; validation is local and scriptable                            | No automated gates on push/PR today                             |
+| In-process upload queue                                              | Fast uploads without Redis/SQS                                                                 | Jobs need SQLite recovery on restart                            |
+| Optional hybrid + reranking                                          | Simple dense baseline; advanced modes opt-in                                                   | More configuration surface                                      |
+| Debug metadata in API and UI                                         | RAG failures become diagnosable in interviews and development                                  | Larger payloads and UI complexity                               |
 
 ## Current Stack
 
@@ -201,7 +201,7 @@ For a guided walkthrough, see [Demo Flow](#demo-flow) above.
 Recommended models:
 
 ```bash
-ollama pull llama3.1
+ollama pull llama3.1:8b
 ollama pull mxbai-embed-large
 ollama serve
 ```
@@ -218,7 +218,7 @@ API_PORT=8000
 CORS_ORIGINS=http://localhost:3000
 
 OLLAMA_BASE_URL=http://localhost:11434
-OLLAMA_CHAT_MODEL=llama3.1
+OLLAMA_CHAT_MODEL=llama3.1:8b
 OLLAMA_EMBED_MODEL=mxbai-embed-large
 
 CHROMA_PERSIST_DIRECTORY=./vector_db
@@ -252,11 +252,45 @@ OTEL_SERVICE_NAME=local-rag-workspace
 
 Diagnostic endpoints (local only):
 
-- `GET /health` — process liveness
-- `GET /health/ready` — dependency readiness (`ok`, `degraded`, or `error`)
-- `GET /debug/reconciliation` — persistence drift report (read-only)
-- `POST /debug/reconciliation/repair` — repair plan (dry-run by default; set `"dry_run": false` to apply safe fixes)
-- `GET /debug/metrics` — in-process counters (resets on restart)
+- `GET /health` - process liveness
+- `GET /health/ready` - dependency readiness (`ok`, `degraded`, or `error`)
+- `GET /debug/reconciliation` - persistence drift report (read-only)
+- `POST /debug/reconciliation/repair` - repair plan (dry-run by default; set `"dry_run": false` to apply safe fixes)
+- `GET /debug/metrics` - in-process counters (resets on restart)
+- `POST /models/recommendations` - hardware-based local Ollama model recommendations (read-only, no external calls)
+- `GET /models/catalog` - curated local model catalog (sanitized for UI)
+- `GET /models/settings` - active local chat model settings
+- `PUT /models/settings` - set chat model explicitly (validates catalog + optional installed check; no `ollama pull`)
+- `POST /models/settings/reset` - reset chat model to backend default
+- `GET /models/runtime` - local Ollama runtime status (reachable, installed models, running/loaded models when `/api/ps` is supported, keep_alive, cold-start hint)
+- `POST /models/runtime/preload` - preload active chat model into memory (no `ollama pull`)
+- `POST /models/runtime/unload` - request unload of active model (`keep_alive=0`; selected model unchanged)
+- `GET /hardware/telemetry` - read-only local CPU/RAM/GPU telemetry (no cloud calls; GPU is best-effort)
+
+Example model recommendation request:
+
+```bash
+curl -X POST http://localhost:8000/models/recommendations \
+  -H "Content-Type: application/json" \
+  -d '{
+    "gpu_vendor": "AMD",
+    "gpu_model": "RX 6700 XT",
+    "vram_gb": 12,
+    "ram_gb": 32,
+    "priority": "balanced",
+    "use_cases": ["rag", "coding", "cybersecurity"]
+  }'
+```
+
+The Model Advisor panel recommends local models from your hardware profile. Use **Use for chat** (or `PUT /models/settings`) to apply a model; the app never pulls or installs models automatically. Runtime status from `/models/runtime` distinguishes installed locally vs loaded in memory; preload/unload are explicit only. Header and Model Advisor use the backend as the single source of truth for Ollama status (no direct browser calls to Ollama). Query rewriting uses a separate configured model unless `USE_CHAT_MODEL_FOR_QUERY_REWRITE=true`.
+
+The sidebar **Local hardware** panel polls `GET /hardware/telemetry` for CPU/RAM usage (via `psutil` on the backend) and best-effort GPU/VRAM when NVIDIA (`nvidia-smi`) or AMD (`rocm-smi` / `amd-smi`) tools are available. Metrics stay on your machine; telemetry can be disabled with `HARDWARE_TELEMETRY_ENABLED=false`. GPU metrics are approximate and provider-dependent — missing GPU tools show a degraded message, not an app error.
+
+Default chat model is `llama3.1:8b` (catalog-aligned). Conservative aliases treat `llama3.1` as `llama3.1:8b` for install matching only - your selected model string is preserved. **Selected** is what chat uses; **installed** is what Ollama reports in `/api/tags`; **loaded** is what Ollama reports in `/api/ps` when supported; **preload** affects memory, not selection. Install models manually, e.g. `ollama pull llama3.1:8b` and `ollama run llama3.1:8b`. Custom models reported by Ollama can be selected even if not in the catalog. The header shows a compact runtime status indicator (loaded / cold start likely / missing / offline / unknown).
+
+Optional Ollama runtime config: `OLLAMA_KEEP_ALIVE=5m`, `OLLAMA_PRELOAD_TIMEOUT_SECONDS=30`, `OLLAMA_TAGS_TIMEOUT_SECONDS=2`, `OLLAMA_PS_TIMEOUT_SECONDS=2`.
+
+Optional hardware telemetry config: `HARDWARE_TELEMETRY_ENABLED=true`, `HARDWARE_TELEMETRY_TIMEOUT_SECONDS=2`, `HARDWARE_TELEMETRY_POLL_SECONDS=5`, `HARDWARE_TELEMETRY_GPU_PROVIDER=auto|nvidia|amd|disabled`.
 
 **Backend validation (no frontend, no Ollama by default):**
 
@@ -338,20 +372,20 @@ python scripts/eval.py --skip-generation --fake-embeddings --report-md tttsss/ev
 
 This writes a Markdown evaluation report you can share as a portfolio artifact. The report includes summary metrics, active configuration (including answer mode and query rewriting), dataset overview, per-example retrieval results, failed cases, and notes about fake embeddings vs full Ollama eval.
 
-| Command | What it verifies |
-| --- | --- |
-| `python -m pytest` | API, ingestion, retrieval, upload recovery, query rewrite, SQLite debug persistence |
-| `python scripts/eval.py --skip-generation --fake-embeddings` | Retrieval recall@k on fixture docs (no Ollama embeddings) |
-| `python scripts/eval.py --skip-generation --fake-embeddings --report-md tttsss/eval_report.md` | Same as above plus a Markdown report artifact |
-| `cd frontend && npm run build` | Next.js production build and TypeScript |
-| `cd frontend && npm run test:e2e` | Local Playwright suite (requires Ollama, backend, frontend on `localhost:3000`) |
-| `cd frontend && npm run test:e2e:headed` | Same tests with visible browser |
-| `cd frontend && npm run test:e2e:ui` | Playwright UI mode (local debugging) |
+| Command                                                                                        | What it verifies                                                                    |
+| ---------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| `python -m pytest`                                                                             | API, ingestion, retrieval, upload recovery, query rewrite, SQLite debug persistence |
+| `python scripts/eval.py --skip-generation --fake-embeddings`                                   | Retrieval recall@k on fixture docs (no Ollama embeddings)                           |
+| `python scripts/eval.py --skip-generation --fake-embeddings --report-md tttsss/eval_report.md` | Same as above plus a Markdown report artifact                                       |
+| `cd frontend && npm run build`                                                                 | Next.js production build and TypeScript                                             |
+| `cd frontend && npm run test:e2e`                                                              | Local Playwright suite (requires Ollama, backend, frontend on `localhost:3000`)     |
+| `cd frontend && npm run test:e2e:headed`                                                       | Same tests with visible browser                                                     |
+| `cd frontend && npm run test:e2e:ui`                                                           | Playwright UI mode (local debugging)                                                |
 
 ### Eval report vs full eval
 
-- **Fake embeddings + skip-generation** — deterministic offline validation; no Ollama required. Best for CI-style checks and the Markdown report.
-- **Full eval** — requires Ollama with the configured embed and chat models pulled; generation output may vary by model.
+- **Fake embeddings + skip-generation** - deterministic offline validation; no Ollama required. Best for CI-style checks and the Markdown report.
+- **Full eval** - requires Ollama with the configured embed and chat models pulled; generation output may vary by model.
 
 `tttsss/eval_report.md` is a local generated artifact and can be regenerated at any time. If `tttsss/` is gitignored, the report is not necessarily committed.
 
@@ -376,11 +410,11 @@ E2E prerequisites: Ollama on the host, backend on `:8000`, frontend on `http://l
 
 ### Ollama and URL notes
 
-| Runtime | Backend `OLLAMA_BASE_URL` | Frontend URL | Notes |
-| --- | --- | --- | --- |
-| Backend on host (`uvicorn`) | `http://localhost:11434` | `http://localhost:3000` | Default local development |
-| Backend in Docker | `http://host.docker.internal:11434` | `http://localhost:3000` | Ollama runs on the host |
-| Browser access | n/a | use `http://localhost:3000` | Avoid `127.0.0.1:3000` unless `CORS_ORIGINS` includes it |
+| Runtime                     | Backend `OLLAMA_BASE_URL`           | Frontend URL                | Notes                                                    |
+| --------------------------- | ----------------------------------- | --------------------------- | -------------------------------------------------------- |
+| Backend on host (`uvicorn`) | `http://localhost:11434`            | `http://localhost:3000`     | Default local development                                |
+| Backend in Docker           | `http://host.docker.internal:11434` | `http://localhost:3000`     | Ollama runs on the host                                  |
+| Browser access              | n/a                                 | use `http://localhost:3000` | Avoid `127.0.0.1:3000` unless `CORS_ORIGINS` includes it |
 
 If eval or chat fail with connection errors while Docker is running, check that the backend is not still pointing at `host.docker.internal` when you run tools directly on the host.
 

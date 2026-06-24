@@ -12,6 +12,10 @@ from services.query_rewriter import QueryRewriter
 from services.reconciliation import PersistenceReconciliationService
 from services.metrics import LocalMetrics, get_local_metrics
 from services.readiness import ReadinessService
+from services.model_recommender import ModelRecommenderService
+from services.model_settings import ModelSettingsService
+from services.model_runtime import ModelRuntimeService
+from services.hardware_telemetry import HardwareTelemetryService
 
 
 @lru_cache
@@ -40,11 +44,43 @@ def get_document_registry() -> DocumentRegistry:
 
 
 @lru_cache
+def get_model_settings_service() -> ModelSettingsService:
+    settings = get_settings()
+
+    def installed_models_provider() -> list[str]:
+        tags_service = OllamaService(
+            base_url=settings.ollama_base_url,
+            model=settings.ollama_chat_model,
+            keep_alive=settings.ollama_keep_alive,
+            tags_timeout_seconds=settings.ollama_tags_timeout_seconds,
+            preload_timeout_seconds=settings.ollama_preload_timeout_seconds,
+        )
+        return tags_service.list_installed_models()
+
+    return ModelSettingsService(
+        settings_path=settings.model_settings_path,
+        default_chat_model=settings.ollama_chat_model,
+        query_rewrite_model=settings.query_rewrite_model,
+        use_chat_model_for_query_rewrite=settings.use_chat_model_for_query_rewrite,
+        installed_models_provider=installed_models_provider,
+    )
+
+
+@lru_cache
 def get_ollama_service() -> OllamaService:
     settings = get_settings()
+
+    def resolve_chat_model() -> str:
+        return get_model_settings_service().get_active_chat_model()
+
     return OllamaService(
         base_url=settings.ollama_base_url,
         model=settings.ollama_chat_model,
+        model_resolver=resolve_chat_model,
+        keep_alive=settings.ollama_keep_alive,
+        tags_timeout_seconds=settings.ollama_tags_timeout_seconds,
+        ps_timeout_seconds=settings.ollama_ps_timeout_seconds,
+        preload_timeout_seconds=settings.ollama_preload_timeout_seconds,
     )
 
 
@@ -52,6 +88,15 @@ def get_ollama_service() -> OllamaService:
 def get_query_rewriter() -> QueryRewriter:
     settings = get_settings()
     ollama_service = get_ollama_service() if settings.enable_query_rewriting else None
+
+    if settings.use_chat_model_for_query_rewrite:
+        return QueryRewriter(
+            enabled=settings.enable_query_rewriting,
+            history_turns=settings.query_rewrite_history_turns,
+            ollama_service=ollama_service,
+            rewrite_model_resolver=lambda: get_model_settings_service().get_rewrite_model(),
+        )
+
     rewrite_model = settings.query_rewrite_model or settings.ollama_chat_model
     return QueryRewriter(
         enabled=settings.enable_query_rewriting,
@@ -123,6 +168,27 @@ def get_local_metrics_service() -> LocalMetrics:
 
 
 @lru_cache
+def get_model_runtime_service() -> ModelRuntimeService:
+    settings = get_settings()
+    return ModelRuntimeService(
+        ollama_service=get_ollama_service(),
+        model_settings=get_model_settings_service(),
+        keep_alive=settings.ollama_keep_alive,
+    )
+
+
+@lru_cache
+def get_hardware_telemetry_service() -> HardwareTelemetryService:
+    settings = get_settings()
+    return HardwareTelemetryService(
+        enabled=settings.hardware_telemetry_enabled,
+        timeout_seconds=settings.hardware_telemetry_timeout_seconds,
+        poll_seconds=settings.hardware_telemetry_poll_seconds,
+        gpu_provider=settings.hardware_telemetry_gpu_provider,
+    )
+
+
+@lru_cache
 def get_readiness_service() -> ReadinessService:
     settings = get_settings()
     return ReadinessService(
@@ -131,7 +197,18 @@ def get_readiness_service() -> ReadinessService:
         chroma_service=get_chroma_service(),
         upload_queue=get_upload_queue_service(),
         metrics=get_local_metrics_service(),
+        model_runtime=get_model_runtime_service(),
     )
+
+
+@lru_cache
+def get_model_recommender_service() -> ModelRecommenderService:
+    ollama_service = get_ollama_service()
+
+    def installed_models_provider() -> list[str]:
+        return ollama_service.list_installed_models()
+
+    return ModelRecommenderService(installed_models_provider=installed_models_provider)
 
 
 _CACHED_GETTERS = (
@@ -147,6 +224,10 @@ _CACHED_GETTERS = (
     get_reconciliation_service,
     get_local_metrics_service,
     get_readiness_service,
+    get_model_recommender_service,
+    get_model_settings_service,
+    get_model_runtime_service,
+    get_hardware_telemetry_service,
 )
 
 

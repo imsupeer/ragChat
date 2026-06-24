@@ -114,13 +114,20 @@ class QueryRewriter:
         history_turns: int,
         ollama_service: Optional[OllamaService] = None,
         rewrite_model: Optional[str] = None,
+        rewrite_model_resolver: Optional[Callable[[], str]] = None,
         generate_fn: Optional[Callable[[str], Awaitable[str]]] = None,
     ) -> None:
         self.enabled = enabled
         self.history_turns = history_turns
         self._ollama_service = ollama_service
         self._rewrite_model = rewrite_model
+        self._rewrite_model_resolver = rewrite_model_resolver
         self._generate_fn = generate_fn
+
+    def _resolve_rewrite_model(self) -> Optional[str]:
+        if self._rewrite_model_resolver is not None:
+            return self._rewrite_model_resolver()
+        return self._rewrite_model
 
     async def rewrite(
         self, question: str, history: list[dict[str, Any]]
@@ -185,10 +192,11 @@ class QueryRewriter:
         if self._ollama_service is None:
             raise RuntimeError("Query rewriting requires an Ollama service or test generate_fn.")
 
-        if self._rewrite_model and self._rewrite_model != self._ollama_service.model:
+        rewrite_model = self._resolve_rewrite_model()
+        if rewrite_model and rewrite_model != self._ollama_service.model:
             rewrite_client = OllamaService(
                 base_url=self._ollama_service.base_url,
-                model=self._rewrite_model,
+                model=rewrite_model,
             )
             return await rewrite_client.generate(prompt)
 

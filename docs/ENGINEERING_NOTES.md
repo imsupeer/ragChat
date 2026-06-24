@@ -4,7 +4,7 @@ Concise reference for how this portfolio project is structured, what was hardene
 
 ## Local-first RAG architecture
 
-This repo is a single-user, local RAG workspace — not a hosted SaaS.
+This repo is a single-user, local RAG workspace - not a hosted SaaS.
 
 - **Backend:** FastAPI orchestrates ingestion, retrieval, reranking, prompt assembly, and Ollama generation.
 - **Frontend:** Next.js streams answers, shows source attribution, and exposes debug evidence in the InsightPanel.
@@ -13,7 +13,7 @@ This repo is a single-user, local RAG workspace — not a hosted SaaS.
 
 Design goal: make pipeline stages inspectable instead of hiding them behind a generic chat UI.
 
-## Batch 1 — Eval integrity
+## Batch 1 - Eval integrity
 
 **Problem:** Eval fixtures and harness drifted from live behavior (stale docs, wrong refusal phrase, hybrid/rerank ignored).
 
@@ -24,7 +24,7 @@ Design goal: make pipeline stages inspectable instead of hiding them behind a ge
 
 **Validate:** `python scripts/eval.py --skip-generation --fake-embeddings` or full eval with Ollama.
 
-## Batch 2 — Upload reliability
+## Batch 2 - Upload reliability
 
 **Problem:** In-process upload queue lost work on restart; partial indexing could leave orphan vectors.
 
@@ -35,7 +35,7 @@ Design goal: make pipeline stages inspectable instead of hiding them behind a ge
 
 **Validate:** `python -m pytest tests/services/test_upload_queue.py`
 
-## Batch 3 — SSE and chat state
+## Batch 3 - SSE and chat state
 
 **Problem:** Stream failures left bad UI/SQLite state; regenerate duplicated user messages.
 
@@ -47,7 +47,7 @@ Design goal: make pipeline stages inspectable instead of hiding them behind a ge
 
 **Validate:** `python -m pytest tests/api/test_chat_api.py`
 
-## Batch 4 — Observability persistence
+## Batch 4 - Observability persistence
 
 **Problem:** Debug metadata existed only for the current browser session.
 
@@ -59,7 +59,7 @@ Design goal: make pipeline stages inspectable instead of hiding them behind a ge
 
 **Validate:** `python -m pytest tests/services/test_sqlite_store.py tests/api/test_chats_api.py`
 
-## Batch 5 — Local quality gates
+## Batch 5 - Local quality gates
 
 **Problem:** Validation required tribal knowledge; eval indexing needed Ollama even for retrieval-only checks.
 
@@ -75,7 +75,7 @@ Design goal: make pipeline stages inspectable instead of hiding them behind a ge
 powershell -ExecutionPolicy Bypass -File scripts/validate.ps1
 ```
 
-## Batch 6 — Cleanup and portfolio polish
+## Batch 6 - Cleanup and portfolio polish
 
 **Outcome:**
 - Removed unused `InMemoryChatHistory` (SQLite is the chat source of truth).
@@ -84,7 +84,7 @@ powershell -ExecutionPolicy Bypass -File scripts/validate.ps1
 - Trimmed prompt module docstrings; behavior unchanged.
 - This document and audit status updates in `tttsss/`.
 
-## Batch 7 — Local Playwright smoke demo
+## Batch 7 - Local Playwright smoke demo
 
 **Goal:** One local E2E test for the portfolio demo flow without CI/CD.
 
@@ -99,7 +99,7 @@ powershell -ExecutionPolicy Bypass -File scripts/validate.ps1
 cd frontend && npm ci && npx playwright install chromium && npm run test:e2e
 ```
 
-## Batch 8 — Multi-turn query rewriting
+## Batch 8 - Multi-turn query rewriting
 
 **Goal:** Optional follow-up support for retrieval without treating chat history as answer evidence.
 
@@ -117,7 +117,7 @@ python -m pytest tests/services/test_query_rewriter.py tests/services/test_chat_
 python scripts/eval.py --skip-generation --fake-embeddings
 ```
 
-## Batch 9 — Portfolio README and demo narrative
+## Batch 9 - Portfolio README and demo narrative
 
 **Goal:** Make the public-facing story clear for recruiters, tech leads, and interview walkthroughs.
 
@@ -128,7 +128,7 @@ python scripts/eval.py --skip-generation --fake-embeddings
 
 **Validate:** Read [`README.md`](../README.md) and follow [Demo Flow](../README.md#demo-flow).
 
-## Batch UP — Answer modes (strict RAG vs hybrid assistant)
+## Batch UP - Answer modes (strict RAG vs hybrid assistant)
 
 **Goal:** Optional answer behavior while preserving strict document-grounded RAG as the default.
 
@@ -146,7 +146,7 @@ python -m pytest
 python scripts/eval.py --skip-generation --fake-embeddings
 ```
 
-## Batch B0.1 — Stream failure debug persistence
+## Batch B0.1 - Stream failure debug persistence
 
 **Goal:** Keep retrieval/prompt debug inspectable after reload when `/chat/stream` generation fails.
 
@@ -161,7 +161,7 @@ python scripts/eval.py --skip-generation --fake-embeddings
 python -m pytest tests/api/test_chat_api.py
 ```
 
-## Batch B1 — Persistence and SQLite Reliability
+## Batch B1 - Persistence and SQLite Reliability
 
 **Goal:** Harden SQLite concurrency, registry durability, compensating document delete, and upload job consistency.
 
@@ -178,7 +178,7 @@ python -m pytest tests/api/test_chat_api.py
 python -m pytest tests/services/test_sqlite_store.py tests/services/test_document_registry.py tests/services/test_document_delete.py tests/api/test_documents_api.py
 ```
 
-## Batch B2 — Retrieval Performance
+## Batch B2 - Retrieval Performance
 
 **Goal:** Eliminate per-query BM25 rebuild and add a local retrieval benchmark.
 
@@ -194,7 +194,7 @@ python -m pytest tests/retrieval/
 python scripts/benchmark_retrieval.py --fake-embeddings --from-eval --repeat 5
 ```
 
-## Batch B3 — Streaming and Async Hardening
+## Batch B3 - Streaming and Async Hardening
 
 **Goal:** Harden SSE disconnect handling, upload queue shutdown, and FastAPI lifespan without changing RAG semantics.
 
@@ -212,7 +212,7 @@ python scripts/benchmark_retrieval.py --fake-embeddings --from-eval --repeat 5
 python -m pytest tests/api/test_chat_api.py tests/api/test_main_lifespan.py tests/services/test_upload_queue.py
 ```
 
-## Batch B4 — Upload/Ingestion Robustness
+## Batch B4 - Upload/Ingestion Robustness
 
 **Goal:** Safer uploads and indexing without changing RAG semantics.
 
@@ -237,7 +237,7 @@ CLEANUP_FAILED_UPLOAD_FILES=true
 python -m pytest tests/api/test_documents_api.py tests/services/test_upload_queue.py tests/ingestion/
 ```
 
-## Batch B6 — Persistence Reconciliation
+## Batch B6 - Persistence Reconciliation
 
 **Goal:** Detect drift across registry, Chroma, filesystem uploads, and SQLite upload jobs without destructive repair.
 
@@ -261,7 +261,7 @@ RECONCILE_REPAIR_ON_STARTUP=false
 python -m pytest tests/services/test_reconciliation.py tests/api/test_debug_api.py tests/api/test_main_lifespan.py
 ```
 
-## Batch B6.1 — Safe Reconciliation Repair
+## Batch B6.1 - Safe Reconciliation Repair
 
 **Goal:** Generate a repair plan from reconciliation findings and apply only safe, explicit repairs (dry-run by default).
 
@@ -270,7 +270,7 @@ python -m pytest tests/services/test_reconciliation.py tests/api/test_debug_api.
 - Safe apply actions: clear stale `upload_jobs.document_id`; mark missing-file jobs failed with a safe message.
 - Manual review only: `orphan_chroma_vectors`, `orphan_file`, registry drift when file or vectors still exist.
 - Optional medium action (opt-in): `remove_stale_registry_entry` when file missing and zero Chroma vectors (`include_stale_registry_cleanup` + `RECONCILE_ALLOW_STALE_REGISTRY_REPAIR=true`).
-- `POST /debug/reconciliation/repair` — default `dry_run: true`; no startup repair (`RECONCILE_REPAIR_ON_STARTUP=false`).
+- `POST /debug/reconciliation/repair` - default `dry_run: true`; no startup repair (`RECONCILE_REPAIR_ON_STARTUP=false`).
 - Metrics: `reconciliation.repair.plan`, `.applied`, `.failed`, `.manual_review`; structured logs for plan/apply.
 
 **Optional env:**
@@ -285,7 +285,7 @@ RECONCILE_ALLOW_STALE_REGISTRY_REPAIR=false
 python -m pytest tests/services/test_reconciliation.py tests/api/test_debug_api.py tests/services/test_sqlite_store.py
 ```
 
-## Batch B5 — Observability, Readiness and Safer Error Surfaces
+## Batch B5 - Observability, Readiness and Safer Error Surfaces
 
 **Goal:** Safer API errors, local metrics, dependency readiness, and debug metadata path redaction without changing RAG semantics.
 
@@ -304,7 +304,7 @@ python -m pytest tests/services/test_reconciliation.py tests/api/test_debug_api.
 python -m pytest tests/api/test_debug_api.py tests/api/test_health_api.py tests/retrieval/test_observability.py tests/services/test_metrics.py
 ```
 
-## Batch B7 — Backend DX and Testability
+## Batch B7 - Backend DX and Testability
 
 **Goal:** Improve test isolation, cache reset, live-test opt-in, and local backend validation without changing product behavior.
 
@@ -338,7 +338,7 @@ Batches B0–B7 and B6.1 hardened persistence, retrieval cache, streaming lifecy
 python scripts/validate_backend.py
 ```
 
-## Batch 10 — Evaluation report export
+## Batch 10 - Evaluation report export
 
 **Goal:** Produce a reviewer-friendly Markdown eval report as a portfolio artifact.
 
@@ -357,7 +357,7 @@ python scripts/eval.py --skip-generation --fake-embeddings --report-md tttsss/ev
 
 **Validate:** `npm run build`; manual retrieval scope and upload queue walkthrough.
 
-## Batch UI-2 — Document selection and upload UX
+## Batch UI-2 - Document selection and upload UX
 
 **Goal:** Make retrieval scope, upload queue lifecycle, and service health visible in the main workspace.
 
@@ -374,7 +374,7 @@ cd frontend && npm run build
 cd frontend && npm run test:e2e
 ```
 
-## Batch UI-8 — Local E2E UX coverage
+## Batch UI-8 - Local E2E UX coverage
 
 **Goal:** Small local Playwright suite covering UI-1–UI-7 flows without CI/CD.
 
@@ -392,7 +392,7 @@ cd frontend && npm run build
 cd frontend && npm run test:e2e
 ```
 
-## Batch UI-7 — Visual system polish
+## Batch UI-7 - Visual system polish
 
 **Goal:** Consistent labels/badges, reduced first-look technical noise, clearer selected message state.
 
@@ -409,7 +409,7 @@ cd frontend && npm run build
 cd frontend && npm run test:e2e
 ```
 
-## Batch UI-6 — Mobile evidence panel UX
+## Batch UI-6 - Mobile evidence panel UX
 
 **Goal:** Single responsive evidence panel; clearer open/close affordances and touch-friendly controls below `xl`.
 
@@ -426,9 +426,9 @@ cd frontend && npm run build
 cd frontend && npm run test:e2e
 ```
 
-## Batch UI-5 — Accessibility and keyboard navigation
+## Batch UI-5 - Accessibility and keyboard navigation
 
-**Goal:** Baseline accessibility polish — ARIA labels, landmarks, focus rings, error announcements, keyboard-friendly upload, reduced motion.
+**Goal:** Baseline accessibility polish - ARIA labels, landmarks, focus rings, error announcements, keyboard-friendly upload, reduced motion.
 
 **Outcome:**
 - Icon-only controls have accessible names; panel/debug toggles expose expanded/pressed state.
@@ -443,7 +443,7 @@ cd frontend && npm run build
 cd frontend && npm run test:e2e
 ```
 
-## Batch UI-4 — InsightPanel information architecture
+## Batch UI-4 - InsightPanel information architecture
 
 **Goal:** Progressive disclosure for evidence/debug; reviewer-friendly summary without removing technical data.
 
@@ -460,7 +460,7 @@ cd frontend && npm run build
 cd frontend && npm run test:e2e
 ```
 
-## Batch UI-3 — Chat streaming and response polish
+## Batch UI-3 - Chat streaming and response polish
 
 **Goal:** Improve chat discoverability, scroll behavior, destructive-action safety, and stream control.
 
@@ -479,7 +479,7 @@ cd frontend && npm run build
 cd frontend && npm run test:e2e
 ```
 
-## Batch UI-1 — Demo clarity and empty states
+## Batch UI-1 - Demo clarity and empty states
 
 **Goal:** Guide first-time users through upload → index → ask → inspect within 30–60 seconds.
 
@@ -494,6 +494,155 @@ cd frontend && npm run test:e2e
 ```bash
 cd frontend && npm run build
 cd frontend && npm run test:e2e
+```
+
+## Batch M1 - Hardware-based local model recommendations
+
+**Goal:** Help users pick suitable local Ollama models from a curated in-repo catalog based on VRAM, RAM, priority, and use cases - without runtime internet access or changing RAG behavior.
+
+**Outcome:**
+- Curated catalog at `backend/data/model_catalog.json` with conservative VRAM/RAM estimates.
+- `ModelRecommenderService` scores fit (`comfortable` / `tight` / `offload` / `not_recommended`), ranks category picks (best overall, fastest, coding, RAG, stretch), and returns an avoid list.
+- `POST /models/recommendations` and `GET /models/catalog` (read-only).
+- Optional installed-model boost via local Ollama `/api/tags` when reachable (short timeout; failures are non-fatal).
+- Sidebar **Model Advisor** UI with hardware presets, use-case checkboxes, and result cards with `ollama run` commands.
+- Metrics: `models.recommendation.request|success|error` plus last confidence/tier (no hardware details stored).
+
+**Validate:**
+
+```bash
+python -m pytest tests/services/test_model_recommender.py tests/api/test_model_recommendations_api.py
+cd frontend && npm run build
+cd frontend && npm run test:e2e -- model-advisor.spec.ts
+```
+
+## Batch M2 - Wire recommended model into chat settings
+
+**Goal:** Make Model Advisor actionable: persist selected chat model locally, use it for `/chat` and `/chat/stream`, and keep query rewriting policy explicit.
+
+**Outcome:**
+- `ModelSettingsService` persists to `storage/model_settings.json` with atomic writes.
+- `GET/PUT /models/settings` and `POST /models/settings/reset` with installed-model validation via local Ollama `/api/tags` (no pull).
+- `OllamaService` resolves active chat model per request from settings; generation debug includes model name.
+- Query rewrite uses `QUERY_REWRITE_MODEL` or config default unless `USE_CHAT_MODEL_FOR_QUERY_REWRITE=true` (default false).
+- Model Advisor: current model, **Use for chat**, reset, installed-model picker; Header shows `Chat model: …` badge.
+- Active stream blocks model switching with a clear message.
+
+**Validate:**
+
+```bash
+python -m pytest tests/services/test_model_settings.py tests/api/test_model_settings_api.py tests/services/test_chat_model_integration.py tests/api/test_chat_api.py
+cd frontend && npm run build
+cd frontend && npm run test:e2e -- model-advisor.spec.ts
+```
+
+## Batch M3 - Model runtime controls and visibility
+
+**Goal:** Expose local Ollama runtime status and explicit preload/unload controls without changing RAG semantics or pulling models.
+
+**Outcome:**
+- `ModelRuntimeService` reports Ollama reachability, installed models, active model install status, and `keep_alive`.
+- `GET /models/runtime`, `POST /models/runtime/preload`, `POST /models/runtime/unload`.
+- Preload/unload use local Ollama `/api/generate` with configured `keep_alive` or `keep_alive=0`; no chat history persistence.
+- `OllamaService` passes `keep_alive` to `ChatOllama` and generation debug metadata.
+- Readiness Ollama check includes active chat model, install status, installed count, and keep_alive.
+- Model Advisor runtime section: refresh, preload, unload (blocked during streaming).
+- InsightPanel reviewer summary shows `Generated with: <model>`; technical metadata shows keep_alive when debug mode is on.
+
+**Validate:**
+
+```bash
+python -m pytest tests/services/test_model_runtime.py tests/api/test_model_runtime_api.py tests/api/test_health_api.py
+cd frontend && npm run build
+cd frontend && npm run test:e2e -- model-advisor.spec.ts
+```
+
+## Batch M4 - Align model defaults, catalog names and runtime guidance
+
+**Goal:** Polish model naming, defaults, alias handling, and user guidance without changing RAG semantics or auto-installing models.
+
+**Outcome:**
+- Default `OLLAMA_CHAT_MODEL` aligned to catalog tag `llama3.1:8b`; existing `storage/model_settings.json` user selections are never overwritten on startup.
+- `backend/services/model_names.py` provides conservative alias map (`llama3.1` → `llama3.1:8b`, `llama3.2` → `llama3.2:3b`), installed matching (`exact` / `alias` / `custom` / `none`), and install/run command strings (never executed).
+- `GET /models/settings` returns `catalog_known`, `installed`, `installed_match`, `match_type`, `install_command`, `run_command`.
+- Recommendations include install/run commands and installed match metadata; installed boost uses alias-aware matching.
+- Header shows compact runtime status chip (`Ollama online`, `offline`, `Active model not installed`, `Runtime degraded`) from `/models/runtime`.
+- Model Advisor clarifies selected vs installed vs preload/unload; copyable pull commands for missing models.
+
+**Validate:**
+
+```bash
+python -m pytest tests/services/test_model_names.py tests/services/test_model_settings.py tests/api/test_model_settings_api.py tests/api/test_model_recommendations_api.py
+cd frontend && npm run build
+cd frontend && npm run test:e2e -- model-advisor.spec.ts
+```
+
+## Batch M5 — Loaded model detection and runtime auto-refresh
+
+**Goal:** Distinguish installed vs loaded Ollama models using local `/api/ps`, with runtime auto-refresh and cold-start guidance.
+
+**Outcome:**
+- `OllamaService.list_running_models()` calls `GET /api/ps` with safe fallback (`available` / `unsupported` / `unavailable`).
+- `GET /models/runtime` includes `running_models`, active model loaded fields, and `runtime.loaded_detection`, `running_models_count`, `cold_start_likely`.
+- Preload/unload responses include refreshed `runtime` snapshot.
+- Readiness includes `active_model_loaded`, `running_models_count`, `loaded_detection`, `cold_start_likely` (informational only).
+- Metrics: `models.runtime.ps_success`, `ps_unavailable`, `loaded_active`, `unloaded_active`.
+- `useModelRuntime` refreshes after preload/unload (delayed follow-up), polls every 30s when sidebar visible.
+- Model Advisor and Header show loaded / cold-start / missing / offline / unknown states.
+
+**Validate:**
+
+```bash
+python -m pytest tests/services/test_ollama_service.py tests/services/test_model_runtime.py tests/api/test_model_runtime_api.py tests/api/test_health_api.py
+cd frontend && npm run build
+cd frontend && npm run test:e2e -- model-advisor.spec.ts
+```
+
+## Local Model Feature Track
+
+Full report: [`tttsss/model_feature_summary.md`](../tttsss/model_feature_summary.md).
+
+M1–M6 delivered hardware-based recommendations, persisted chat settings, runtime preload/unload, alias-aware install matching, loaded-model detection via `/api/ps`, and backend-only frontend runtime status.
+
+Endpoints:
+
+- `POST /models/recommendations`
+- `GET /models/catalog`
+- `GET /models/settings`
+- `PUT /models/settings`
+- `POST /models/settings/reset`
+- `GET /models/runtime`
+- `POST /models/runtime/preload`
+- `POST /models/runtime/unload`
+
+## Batch M6 — Model UX cleanup and track wrap-up
+
+**Goal:** Remove redundant browser Ollama polling, clarify query rewrite policy, align terminology, document the model track.
+
+**Outcome:**
+- Header Ollama status derived from backend `/models/runtime` only (no browser `/api/tags`).
+- `GET /models/settings` and runtime settings include `query_rewrite` policy object.
+- Model Advisor shows query rewrite policy and consistent selected/installed/loaded terminology.
+- `tttsss/model_feature_summary.md` created; audit and engineering notes updated.
+
+## Batch H1 — Local hardware telemetry dashboard
+
+**Goal:** Read-only local CPU/RAM/GPU/VRAM telemetry in the sidebar without cloud calls or readiness impact.
+
+**Outcome:**
+- `HardwareTelemetryService` collects CPU/RAM via `psutil`; GPU via `nvidia-smi`, `rocm-smi`, or `amd-smi` with safe fallbacks.
+- `GET /hardware/telemetry` returns `status`, `cpu`, `memory`, `gpu`, `poll_interval_seconds`, `checked_at`.
+- GPU statuses: `ok`, `unsupported`, `unavailable`, `disabled`, `error` — missing tools never crash startup.
+- Metrics: `hardware.telemetry.request|success|error|gpu_available|gpu_unavailable` plus last CPU/RAM/GPU usage values (no serial numbers stored).
+- Frontend `HardwareTelemetryPanel` in sidebar above Model Advisor; `useHardwareTelemetry` polls every 5s while sidebar visible (pauses when tab hidden); refreshes after preload/unload.
+- Config: `HARDWARE_TELEMETRY_ENABLED`, `HARDWARE_TELEMETRY_TIMEOUT_SECONDS`, `HARDWARE_TELEMETRY_POLL_SECONDS`, `HARDWARE_TELEMETRY_GPU_PROVIDER`.
+
+**Validate:**
+
+```bash
+python -m pytest tests/services/test_hardware_telemetry.py tests/api/test_hardware_telemetry_api.py
+cd frontend && npm run build
+cd frontend && npm run test:e2e -- hardware-telemetry.spec.ts
 ```
 
 ## Why CI/CD is out of scope

@@ -123,7 +123,7 @@ def test_render_markdown_report_includes_chunk_ids_and_skip_generation():
     assert "retrieval_design.md:0" in markdown
     assert "limitations.md:0" in markdown
     assert "Generation skipped." in markdown
-    assert "N/A — generation skipped" in markdown
+    assert "N/A - generation skipped" in markdown
 
 
 def test_render_markdown_report_writes_no_failed_cases_exactly():

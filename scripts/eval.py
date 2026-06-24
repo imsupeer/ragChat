@@ -324,7 +324,9 @@ def format_bool(value: bool | None) -> str:
     return "true" if value else "false"
 
 
-def analyze_dataset(dataset: dict[str, Any], dataset_path: Path | str) -> dict[str, Any]:
+def analyze_dataset(
+    dataset: dict[str, Any], dataset_path: Path | str
+) -> dict[str, Any]:
     examples = dataset.get("examples", [])
     example_ids = [example["id"] for example in examples]
     with_document_ids = sum(1 for example in examples if example.get("document_ids"))
@@ -360,9 +362,10 @@ def collect_failed_cases(results: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
     for result in results:
         failure_types: list[str] = []
-        if result.get("expected_source_chunk_ids") and result.get(
-            "correct_chunk_retrieved"
-        ) is False:
+        if (
+            result.get("expected_source_chunk_ids")
+            and result.get("correct_chunk_retrieved") is False
+        ):
             failure_types.append("recall")
         if result.get("answer_correct") is False:
             failure_types.append("answer")
@@ -389,7 +392,7 @@ def format_recall_status(result: dict[str, Any]) -> str:
 
 def format_answer_accuracy_status(result: dict[str, Any]) -> str:
     if result.get("generation_skipped"):
-        return "N/A — generation skipped"
+        return "N/A - generation skipped"
     if result.get("answer_correct") is True:
         return "pass"
     if result.get("answer_correct") is False:
@@ -417,7 +420,7 @@ def render_markdown_report(report: dict[str, Any]) -> str:
         real_ollama_display = "yes"
 
     if skip_generation:
-        answer_accuracy_display = "N/A — generation skipped"
+        answer_accuracy_display = "N/A - generation skipped"
     elif summary.get("answer_accuracy") is None:
         answer_accuracy_display = "N/A"
     else:
@@ -490,7 +493,9 @@ def render_markdown_report(report: dict[str, Any]) -> str:
             else "N/A"
         )
         document_ids = ", ".join(result.get("document_ids") or []) or "N/A"
-        expected_chunks = ", ".join(result.get("expected_source_chunk_ids") or []) or "N/A"
+        expected_chunks = (
+            ", ".join(result.get("expected_source_chunk_ids") or []) or "N/A"
+        )
         retrieved_chunks = ", ".join(result.get("retrieved_chunk_ids") or []) or "N/A"
         retrieval_override = (
             "yes"
@@ -535,8 +540,12 @@ def render_markdown_report(report: dict[str, Any]) -> str:
     else:
         for failure in failures:
             failure_types = ", ".join(failure.get("failure_types", []))
-            expected_chunks = ", ".join(failure.get("expected_source_chunk_ids") or []) or "N/A"
-            retrieved_chunks = ", ".join(failure.get("retrieved_chunk_ids") or []) or "N/A"
+            expected_chunks = (
+                ", ".join(failure.get("expected_source_chunk_ids") or []) or "N/A"
+            )
+            retrieved_chunks = (
+                ", ".join(failure.get("retrieved_chunk_ids") or []) or "N/A"
+            )
             notes = failure.get("notes") or failure.get("error") or "N/A"
             lines.extend(
                 [

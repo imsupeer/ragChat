@@ -123,6 +123,7 @@ export type ChatDebugInfo = {
     latency_ms: number;
     output_length_chars: number;
     output_token_estimate: number;
+    keep_alive?: string;
   };
   total_latency_ms?: number;
   query_rewriting?: {

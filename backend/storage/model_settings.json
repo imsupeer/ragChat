@@ -1,0 +1,8 @@
+{
+  "chat_model": "llama3.2:1b",
+  "default_chat_model": "llama3.2:1b",
+  "query_rewrite_model": "llama3.2:1b",
+  "use_chat_model_for_query_rewrite": false,
+  "source": "default",
+  "updated_at": "2026-06-24T13:17:55+00:00"
+}

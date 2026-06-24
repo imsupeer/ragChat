@@ -2,19 +2,7 @@
 
 import { useMemo, useState, type RefObject } from 'react';
 import clsx from 'clsx';
-import {
-  Activity,
-  BookOpenText,
-  Braces,
-  ChevronDown,
-  ChevronUp,
-  FileText,
-  Gauge,
-  Layers3,
-  SearchCheck,
-  Sparkles,
-  X,
-} from 'lucide-react';
+import { Activity, BookOpenText, Braces, ChevronDown, ChevronUp, FileText, Gauge, Layers3, SearchCheck, Sparkles, X } from 'lucide-react';
 import type { ChatDebugInfo, ChatMessage, RetrievalResultDebug, SourceReference } from '@/types/chat';
 
 type PanelTab = 'sources' | 'debug';
@@ -25,7 +13,7 @@ function getSourceKey(item: Pick<SourceReference, 'chunk_id' | 'source' | 'chunk
 
 function formatNumber(value?: number | null, digits = 3) {
   if (value == null || Number.isNaN(value)) {
-    return '—';
+    return '-';
   }
 
   return Number(value).toFixed(digits);
@@ -33,7 +21,7 @@ function formatNumber(value?: number | null, digits = 3) {
 
 function formatLatency(value?: number | null) {
   if (value == null || Number.isNaN(value)) {
-    return '—';
+    return '-';
   }
 
   return `${Math.round(value)} ms`;
@@ -72,7 +60,7 @@ function getAnswerModeDisplay(mode?: string | null) {
   if (mode === 'hybrid_assistant') {
     return {
       label: 'Hybrid Assistant',
-      summary: 'Answer mode: Hybrid assistant — documents first, general knowledge allowed when needed.',
+      summary: 'Answer mode: Hybrid assistant - documents first, general knowledge allowed when needed.',
       description: 'Prioritizes documents, may use general model knowledge when document context is missing or incomplete.',
       raw: mode,
     };
@@ -80,7 +68,7 @@ function getAnswerModeDisplay(mode?: string | null) {
 
   return {
     label: 'Strict RAG',
-    summary: 'Answer mode: Strict RAG — document context only.',
+    summary: 'Answer mode: Strict RAG - document context only.',
     description: 'Answers only from retrieved document context.',
     raw: mode ?? 'strict_rag',
   };
@@ -222,10 +210,7 @@ function MetricCard({ label, value, help }: { label: string; value: string; help
 function ScoreBadge({ score, scoreType }: { score: number; scoreType?: string | null }) {
   const help = getScoreHelp(scoreType);
   return (
-    <span
-      title={help ?? undefined}
-      className="app-badge"
-    >
+    <span title={help ?? undefined} className="app-badge">
       {formatScoreBadge(score, scoreType)}
     </span>
   );
@@ -249,9 +234,7 @@ function ChunkDebugCard({ result, index }: { result: RetrievalResultDebug; index
         {result.lexical_score != null ? <ScoreBadge score={result.lexical_score} scoreType="bm25" /> : null}
         {result.fused_score != null ? <ScoreBadge score={result.fused_score} scoreType="rrf" /> : null}
         {result.rerank_score != null ? <ScoreBadge score={result.rerank_score} scoreType="rerank" /> : null}
-        {result.score != null ? (
-          <ScoreBadge score={result.score} scoreType={result.score_type ?? result.retrieval_score_type} />
-        ) : null}
+        {result.score != null ? <ScoreBadge score={result.score} scoreType={result.score_type ?? result.retrieval_score_type} /> : null}
       </div>
       {scoreHelp && primaryScore != null ? <div className="mt-2 text-[11px] text-gray-500">{scoreHelp}</div> : null}
       <div className="mt-3 text-sm leading-7 text-gray-300">{result.preview}</div>
@@ -275,11 +258,7 @@ function CollapsibleSection({
   children: React.ReactNode;
 }) {
   return (
-    <details
-      open={defaultOpen}
-      data-testid={testId}
-      className="group rounded-2xl border border-border bg-white/[0.03] p-4"
-    >
+    <details open={defaultOpen} data-testid={testId} className="group rounded-2xl border border-border bg-white/[0.03] p-4">
       <summary className="focus-ring flex min-h-10 cursor-pointer list-none items-start justify-between gap-3 rounded-lg px-1 py-1 [&::-webkit-details-marker]:hidden">
         <div className="min-w-0">
           <div className="flex items-center gap-2 text-sm font-medium text-white">
@@ -295,15 +274,7 @@ function CollapsibleSection({
   );
 }
 
-function ReviewerSummary({
-  message,
-  question,
-  debug,
-}: {
-  message: ChatMessage;
-  question: string | null;
-  debug: ChatDebugInfo | null;
-}) {
+function ReviewerSummary({ message, question, debug }: { message: ChatMessage; question: string | null; debug: ChatDebugInfo | null }) {
   const answerMode = getAnswerModeDisplay(debug?.prompt?.answer_mode);
   const queryRewriting = getQueryRewritingDisplay(debug?.query_rewriting);
   const sourceCount = message.sources?.length ?? 0;
@@ -311,10 +282,7 @@ function ReviewerSummary({
   const rerankingEnabled = debug?.reranking?.enabled ?? false;
 
   return (
-    <div
-      data-testid="insight-reviewer-summary"
-      className="rounded-2xl border border-violet-500/20 bg-violet-500/5 p-4"
-    >
+    <div data-testid="insight-reviewer-summary" className="rounded-2xl border border-violet-500/20 bg-violet-500/5 p-4">
       <div className="app-label flex items-center gap-2 text-violet-300/90">
         <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
         Reviewer summary
@@ -323,20 +291,23 @@ function ReviewerSummary({
       <div className="mt-3 space-y-2 text-sm text-gray-200">
         <p>{answerMode.summary}</p>
         {queryRewriting.line ? <p>{queryRewriting.line}</p> : null}
+        {debug?.generation?.model ? (
+          <p data-testid="insight-generation-model">
+            Generated with: <span className="font-mono text-gray-100">{debug.generation.model}</span>
+          </p>
+        ) : null}
       </div>
 
       <div className="mt-3 flex flex-wrap gap-2">
-        {queryRewriting.badge ? (
-          <span className="app-badge border-amber-500/30 bg-amber-500/10 text-amber-100">{queryRewriting.badge}</span>
-        ) : null}
-        <span className="app-badge">{sourceCount} source{sourceCount === 1 ? '' : 's'}</span>
-        <span className="app-badge">{usedChunkCount} chunk{usedChunkCount === 1 ? '' : 's'} in prompt</span>
-        {rerankingEnabled ? (
-          <span className="app-badge border-emerald-500/30 bg-emerald-500/10 text-emerald-100">Reranking applied</span>
-        ) : null}
-        {debug?.total_latency_ms != null ? (
-          <span className="app-badge">{formatLatency(debug.total_latency_ms)} total</span>
-        ) : null}
+        {queryRewriting.badge ? <span className="app-badge border-amber-500/30 bg-amber-500/10 text-amber-100">{queryRewriting.badge}</span> : null}
+        <span className="app-badge">
+          {sourceCount} source{sourceCount === 1 ? '' : 's'}
+        </span>
+        <span className="app-badge">
+          {usedChunkCount} chunk{usedChunkCount === 1 ? '' : 's'} in prompt
+        </span>
+        {rerankingEnabled ? <span className="app-badge border-emerald-500/30 bg-emerald-500/10 text-emerald-100">Reranking applied</span> : null}
+        {debug?.total_latency_ms != null ? <span className="app-badge">{formatLatency(debug.total_latency_ms)} total</span> : null}
       </div>
 
       {question ? (
@@ -414,10 +385,7 @@ function SourceCard({
           </span>
         ))}
         {source.score != null ? (
-          <span
-            title={scoreHelp ?? undefined}
-            className="rounded-full border border-sky-500/20 bg-sky-500/10 px-2.5 py-1 text-sky-100"
-          >
+          <span title={scoreHelp ?? undefined} className="rounded-full border border-sky-500/20 bg-sky-500/10 px-2.5 py-1 text-sky-100">
             {formatScoreBadge(source.score, scoreType)}
           </span>
         ) : null}
@@ -455,13 +423,13 @@ function SourceCard({
   );
 }
 
-function DebugPanel({ debug, tabsPrefix }: { debug: ChatDebugInfo; tabsPrefix: string }) {
+function DebugPanel({ debug, tabsPrefix, debugMode }: { debug: ChatDebugInfo; tabsPrefix: string; debugMode: boolean }) {
   const usedChunks =
     debug.prompt?.used_chunks ??
     (debug.reranking?.enabled ? debug.reranking.results : debug.retrieval?.results?.slice(0, debug.retrieval?.used_count ?? 0)) ??
     [];
   const retrievedCandidates = debug.retrieval?.results ?? [];
-  const rerankedCandidates = debug.reranking?.enabled ? debug.reranking.results ?? [] : [];
+  const rerankedCandidates = debug.reranking?.enabled ? (debug.reranking.results ?? []) : [];
   const queryRewriting = getQueryRewritingDisplay(debug.query_rewriting);
   const answerMode = getAnswerModeDisplay(debug.prompt?.answer_mode);
 
@@ -482,16 +450,8 @@ function DebugPanel({ debug, tabsPrefix }: { debug: ChatDebugInfo; tabsPrefix: s
           subtitle={queryRewriting.line ?? undefined}
         >
           <div className="grid gap-3 md:grid-cols-2">
-            <MetricCard
-              label="Used"
-              value={debug.query_rewriting.used ? 'Yes' : 'No'}
-              help="Whether chat history changed the retrieval query."
-            />
-            <MetricCard
-              label="Latency"
-              value={formatLatency(debug.query_rewriting.latency_ms)}
-              help="Time spent rewriting the retrieval query."
-            />
+            <MetricCard label="Used" value={debug.query_rewriting.used ? 'Yes' : 'No'} help="Whether chat history changed the retrieval query." />
+            <MetricCard label="Latency" value={formatLatency(debug.query_rewriting.latency_ms)} help="Time spent rewriting the retrieval query." />
             <MetricCard
               label="History Turns"
               value={String(debug.query_rewriting.history_turns_used)}
@@ -520,9 +480,7 @@ function DebugPanel({ debug, tabsPrefix }: { debug: ChatDebugInfo; tabsPrefix: s
       >
         <div className="space-y-3">
           {usedChunks.length ? (
-            usedChunks.map((result, index) => (
-              <ChunkDebugCard key={result.chunk_id ?? `${result.source}-${index}`} result={result} index={index} />
-            ))
+            usedChunks.map((result, index) => <ChunkDebugCard key={result.chunk_id ?? `${result.source}-${index}`} result={result} index={index} />)
           ) : (
             <div className="text-sm text-gray-400">No prompt chunk metadata available.</div>
           )}
@@ -571,9 +529,7 @@ function DebugPanel({ debug, tabsPrefix }: { debug: ChatDebugInfo; tabsPrefix: s
         testId="debug-retrieved-candidates"
         subtitle={`${retrievedCandidates.length} candidates before prompt trimming · ${formatLatency(debug.retrieval?.latency_ms)} retrieval`}
       >
-        <p className="mb-3 text-xs text-gray-500">
-          All chunks returned by retrieval. Only a subset may appear in the final prompt.
-        </p>
+        <p className="mb-3 text-xs text-gray-500">All chunks returned by retrieval. Only a subset may appear in the final prompt.</p>
         <div className="space-y-3">
           {retrievedCandidates.length ? (
             retrievedCandidates.map((result, index) => (
@@ -597,15 +553,23 @@ function DebugPanel({ debug, tabsPrefix }: { debug: ChatDebugInfo; tabsPrefix: s
           <MetricCard label="Total Latency" value={formatLatency(debug.total_latency_ms)} help="End-to-end request time reported by the backend." />
           <MetricCard
             label="Prompt Tokens"
-            value={String(debug.prompt?.prompt_token_estimate ?? '—')}
+            value={String(debug.prompt?.prompt_token_estimate ?? '-')}
             help="Estimated prompt token count after context assembly."
           />
           <MetricCard
             label="Output Tokens"
-            value={String(debug.generation?.output_token_estimate ?? '—')}
+            value={String(debug.generation?.output_token_estimate ?? '-')}
             help="Estimated number of generated output tokens."
           />
           <MetricCard label="Answer Mode" value={answerMode.label} help={answerMode.description} />
+          <MetricCard label="Generation Model" value={debug.generation?.model ?? '-'} help="Local Ollama chat model used for this answer." />
+          {debugMode && debug.generation?.keep_alive ? (
+            <MetricCard
+              label="Keep Alive"
+              value={debug.generation.keep_alive}
+              help="Configured Ollama keep_alive duration for generation requests."
+            />
+          ) : null}
           <MetricCard
             label="Retrieval Chunks"
             value={`${debug.retrieval?.used_count ?? 0}/${debug.retrieval?.candidate_count ?? debug.retrieval?.retrieved_count ?? 0}`}
@@ -682,9 +646,7 @@ export function InsightPanel({
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <div className="app-label">Evidence panel</div>
-            <div className="mt-2 text-sm text-gray-200 xl:block">
-              Sources, scores, and pipeline details for the selected answer.
-            </div>
+            <div className="mt-2 text-sm text-gray-200 xl:block">Sources, scores, and pipeline details for the selected answer.</div>
           </div>
 
           <button
@@ -758,8 +720,7 @@ export function InsightPanel({
                 <div className="rounded-2xl border border-border bg-white/[0.03] p-4" data-testid="sources-summary">
                   <div className="app-label">Evidence summary</div>
                   <div className="mt-2 text-sm text-gray-200">
-                    {sourceCount} source{sourceCount === 1 ? '' : 's'} · {usedChunkCount} chunk{usedChunkCount === 1 ? '' : 's'} used in
-                    prompt
+                    {sourceCount} source{sourceCount === 1 ? '' : 's'} · {usedChunkCount} chunk{usedChunkCount === 1 ? '' : 's'} used in prompt
                   </div>
                   {message.content ? (
                     <div className="mt-3 rounded-xl border border-border bg-black/20 p-3 text-xs leading-6 text-gray-300">
@@ -773,12 +734,7 @@ export function InsightPanel({
 
                 {enrichedSources.length ? (
                   enrichedSources.map((source, index) => (
-                    <SourceCard
-                      key={getSourceKey(source) ?? `${source.source}-${index}`}
-                      source={source}
-                      debugMode={debugMode}
-                      query={question}
-                    />
+                    <SourceCard key={getSourceKey(source) ?? `${source.source}-${index}`} source={source} debugMode={debugMode} query={question} />
                   ))
                 ) : (
                   <div className="rounded-3xl border border-border bg-white/[0.03] p-6 text-sm text-gray-300">
@@ -787,7 +743,7 @@ export function InsightPanel({
                 )}
               </div>
             ) : debug ? (
-              <DebugPanel debug={debug} tabsPrefix={tabsPrefix} />
+              <DebugPanel debug={debug} tabsPrefix={tabsPrefix} debugMode={debugMode} />
             ) : (
               <div
                 id={`${tabsPrefix}-tabpanel-debug`}

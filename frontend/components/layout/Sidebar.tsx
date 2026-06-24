@@ -6,10 +6,14 @@ import { ChatSessionList } from '@/components/chat/ChatSessionList';
 import { DocumentList } from '@/components/documents/DocumentList';
 import { DocumentUploader } from '@/components/documents/DocumentUploader';
 import { UploadQueueList } from '@/components/documents/UploadQueueList';
+import { ModelAdvisor } from '@/components/models/ModelAdvisor';
+import { HardwareTelemetryPanel } from '@/components/hardware/HardwareTelemetryPanel';
 import { ErrorMessage } from '@/components/ui/ErrorMessage';
 import { Skeleton } from '@/components/ui/Skeleton';
 import type { ChatSession } from '@/types/chat';
 import type { DocumentItem, UploadQueueItem } from '@/types/document';
+import type { ModelSettingsState, ModelRuntimeStatus } from '@/types/models';
+import type { HardwareTelemetrySnapshot } from '@/types/hardware';
 
 export function Sidebar({
   documents,
@@ -19,6 +23,25 @@ export function Sidebar({
   queueItems,
   chats,
   activeChatId,
+  isStreaming,
+  modelSettings,
+  modelSettingsLoading,
+  modelSettingsError,
+  modelActionMessage,
+  modelRuntime,
+  modelRuntimeLoading,
+  modelRuntimeError,
+  modelRuntimeActionMessage,
+  modelRuntimeActionLoading,
+  onApplyChatModel,
+  onResetChatModel,
+  onRefreshModelRuntime,
+  onPreloadActiveModel,
+  onUnloadActiveModel,
+  hardwareTelemetry,
+  hardwareTelemetryLoading,
+  hardwareTelemetryError,
+  onRefreshHardwareTelemetry,
   onUpload,
   onDeleteDocument,
   onToggleDocument,
@@ -35,6 +58,25 @@ export function Sidebar({
   queueItems: UploadQueueItem[];
   chats: ChatSession[];
   activeChatId: string | null;
+  isStreaming: boolean;
+  modelSettings: ModelSettingsState | null;
+  modelSettingsLoading: boolean;
+  modelSettingsError: string | null;
+  modelActionMessage: string | null;
+  modelRuntime: ModelRuntimeStatus | null;
+  modelRuntimeLoading: boolean;
+  modelRuntimeError: string | null;
+  modelRuntimeActionMessage: string | null;
+  modelRuntimeActionLoading: 'preload' | 'unload' | null;
+  onApplyChatModel: (chatModel: string) => Promise<void>;
+  onResetChatModel: () => Promise<void>;
+  onRefreshModelRuntime: () => Promise<void>;
+  onPreloadActiveModel: () => Promise<void>;
+  onUnloadActiveModel: () => Promise<void>;
+  hardwareTelemetry: HardwareTelemetrySnapshot | null;
+  hardwareTelemetryLoading: boolean;
+  hardwareTelemetryError: string | null;
+  onRefreshHardwareTelemetry: () => Promise<void>;
   onUpload: (files: File[]) => Promise<void>;
   onDeleteDocument: (id: string) => Promise<void>;
   onToggleDocument: (id: string) => void;
@@ -123,6 +165,32 @@ export function Sidebar({
           </>
         )}
       </div>
+
+      <HardwareTelemetryPanel
+        telemetry={hardwareTelemetry}
+        loading={hardwareTelemetryLoading}
+        error={hardwareTelemetryError}
+        modelRuntime={modelRuntime}
+        onRefresh={onRefreshHardwareTelemetry}
+      />
+
+      <ModelAdvisor
+        isStreaming={isStreaming}
+        settings={modelSettings}
+        settingsLoading={modelSettingsLoading}
+        settingsError={modelSettingsError}
+        actionMessage={modelActionMessage}
+        runtime={modelRuntime}
+        runtimeLoading={modelRuntimeLoading}
+        runtimeError={modelRuntimeError}
+        runtimeActionMessage={modelRuntimeActionMessage}
+        runtimeActionLoading={modelRuntimeActionLoading}
+        onApplyChatModel={onApplyChatModel}
+        onResetChatModel={onResetChatModel}
+        onRefreshRuntime={onRefreshModelRuntime}
+        onPreloadActiveModel={onPreloadActiveModel}
+        onUnloadActiveModel={onUnloadActiveModel}
+      />
     </aside>
   );
 }

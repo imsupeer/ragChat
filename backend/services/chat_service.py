@@ -242,6 +242,7 @@ class ChatService:
             model=self.ollama_service.model,
             output_text=answer,
             latency_ms=elapsed_ms(generation_started, generation_finished),
+            keep_alive=self.ollama_service.keep_alive,
         )
         log_structured("rag.generation", prepared["trace_id"], generation_debug)
 

@@ -11,7 +11,14 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
 
     try {
       const data = await response.json();
-      detail = data?.detail ?? data?.message ?? detail;
+      const rawDetail = data?.detail ?? data?.message;
+      if (typeof rawDetail === 'string') {
+        detail = rawDetail;
+      } else if (rawDetail && typeof rawDetail === 'object' && 'message' in rawDetail) {
+        detail = String((rawDetail as { message?: string }).message ?? detail);
+      } else if (rawDetail) {
+        detail = JSON.stringify(rawDetail);
+      }
     } catch {
       const text = await response.text();
       if (text) detail = text;

@@ -2,41 +2,145 @@
 
 import { useCallback, useEffect, useMemo, useState, type RefObject } from 'react';
 import { Braces, Cpu, Files, Gpu, PanelRightClose, PanelRightOpen, RefreshCw } from 'lucide-react';
+import type { ModelRuntimeStatus } from '@/types/models';
 
-const STATUS_POLL_MS = 30_000;
+const BACKEND_STATUS_POLL_MS = 30_000;
 
 function getStatusColor(status: string) {
   if (status.toLowerCase().includes('offline')) {
     return 'border-red-500/30 bg-red-500/10 text-red-300';
   }
 
+  if (status.toLowerCase().includes('missing') || status.toLowerCase().includes('not installed')) {
+    return 'border-yellow-500/30 bg-yellow-500/10 text-yellow-300';
+  }
+
+  if (status.toLowerCase().includes('degraded')) {
+    return 'border-amber-500/30 bg-amber-500/10 text-amber-200';
+  }
+
   if (status.toLowerCase().includes('no models')) {
     return 'border-yellow-500/30 bg-yellow-500/10 text-yellow-300';
   }
 
-  if (status.toLowerCase().includes('checking')) {
+  if (status.toLowerCase().includes('cold start')) {
+    return 'border-sky-500/30 bg-sky-500/10 text-sky-200';
+  }
+
+  if (status.toLowerCase().includes('loaded') && !status.toLowerCase().includes('not')) {
+    return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300';
+  }
+
+  if (status.toLowerCase().includes('unknown')) {
+    return 'border-border bg-white/[0.03] text-gray-400';
+  }
+
+  if (status.toLowerCase().includes('checking') || status.toLowerCase().includes('loading')) {
     return 'border-border bg-white/[0.03] text-gray-400';
   }
 
   return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300';
 }
 
-async function fetchServiceStatus(
-  url: string,
-  onSuccess: (data?: unknown) => string,
-  onError: () => string,
-): Promise<string> {
-  try {
-    const response = await fetch(url, { cache: 'no-store' });
-    if (!response.ok) {
-      throw new Error('Request failed');
-    }
-
-    const data = await response.json();
-    return onSuccess(data);
-  } catch {
-    return onError();
+function deriveModelRuntimeHeaderStatus(
+  runtime: ModelRuntimeStatus | null,
+  loading: boolean,
+): { label: string; title: string; dotClass: string } {
+  if (loading) {
+    return {
+      label: 'Checking runtime…',
+      title: 'Loading local Ollama runtime status from the backend.',
+      dotClass: 'bg-gray-400',
+    };
   }
+
+  if (!runtime) {
+    return {
+      label: 'Runtime unknown',
+      title: 'Model runtime status is not available yet.',
+      dotClass: 'bg-gray-500',
+    };
+  }
+
+  if (!runtime.ollama.reachable) {
+    return {
+      label: 'Offline',
+      title: runtime.ollama.message ?? 'Ollama is unreachable on the configured local URL.',
+      dotClass: 'bg-red-400',
+    };
+  }
+
+  if (runtime.active_model.installed === false) {
+    return {
+      label: 'Missing',
+      title:
+        runtime.ollama.message ??
+        `Selected chat model ${runtime.active_model.name} is not installed locally.`,
+      dotClass: 'bg-yellow-400',
+    };
+  }
+
+  if (runtime.ollama.status === 'degraded') {
+    return {
+      label: 'Runtime degraded',
+      title: runtime.ollama.message ?? 'Ollama is reachable but runtime checks reported a degraded state.',
+      dotClass: 'bg-amber-400',
+    };
+  }
+
+  if (runtime.active_model.loaded === true) {
+    return {
+      label: 'Loaded',
+      title: 'Selected chat model is installed locally and loaded in Ollama memory.',
+      dotClass: 'bg-emerald-400',
+    };
+  }
+
+  if (runtime.runtime.cold_start_likely) {
+    return {
+      label: 'Cold start likely',
+      title: 'Selected model is installed locally but not loaded. The next response may have cold-start latency.',
+      dotClass: 'bg-sky-400',
+    };
+  }
+
+  if (runtime.runtime.loaded_detection === 'unsupported' || runtime.runtime.loaded_detection === 'unavailable') {
+    return {
+      label: 'Unknown',
+      title: 'Installed status is available, but loaded-model detection is not available from this Ollama runtime.',
+      dotClass: 'bg-gray-400',
+    };
+  }
+
+  return {
+    label: 'Installed locally',
+    title: 'Ollama is reachable and the selected chat model is installed locally.',
+    dotClass: 'bg-emerald-400',
+  };
+}
+
+function deriveOllamaServiceStatus(runtime: ModelRuntimeStatus | null, loading: boolean): string {
+  if (loading) {
+    return 'Checking Ollama…';
+  }
+
+  if (!runtime) {
+    return 'Ollama unknown';
+  }
+
+  if (!runtime.ollama.reachable) {
+    return 'Ollama offline';
+  }
+
+  if (runtime.active_model.installed === false) {
+    return 'Selected model not installed';
+  }
+
+  if (runtime.installed_models_count === 0) {
+    return 'Ollama online (no models)';
+  }
+
+  return 'Ollama online';
 }
 
 function buildRetrievalScope(documentCount: number, selectedDocumentCount: number) {
@@ -66,6 +170,10 @@ export function Header({
   documentCount,
   selectedDocumentCount,
   activeSourceCount,
+  chatModel,
+  modelRuntime,
+  modelRuntimeLoading,
+  onRefreshModelRuntime,
   debugMode,
   panelOpen,
   panelToggleRef,
@@ -75,6 +183,10 @@ export function Header({
   documentCount: number;
   selectedDocumentCount: number;
   activeSourceCount: number;
+  chatModel: string | null;
+  modelRuntime: ModelRuntimeStatus | null;
+  modelRuntimeLoading: boolean;
+  onRefreshModelRuntime?: () => Promise<void>;
   debugMode: boolean;
   panelOpen: boolean;
   panelToggleRef?: RefObject<HTMLButtonElement>;
@@ -82,7 +194,6 @@ export function Header({
   onTogglePanel: () => void;
 }) {
   const [backendStatus, setBackendStatus] = useState('Checking backend...');
-  const [ollamaStatus, setOllamaStatus] = useState('Checking Ollama...');
   const [refreshing, setRefreshing] = useState(false);
 
   const retrievalScope = useMemo(
@@ -90,40 +201,45 @@ export function Header({
     [documentCount, selectedDocumentCount],
   );
 
-  const refreshStatus = useCallback(async () => {
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000';
-    const ollamaUrl = process.env.NEXT_PUBLIC_OLLAMA_URL ?? 'http://localhost:11434';
+  const runtimeHeaderStatus = useMemo(
+    () => deriveModelRuntimeHeaderStatus(modelRuntime, modelRuntimeLoading),
+    [modelRuntime, modelRuntimeLoading],
+  );
 
-    setRefreshing(true);
+  const ollamaStatus = useMemo(
+    () => deriveOllamaServiceStatus(modelRuntime, modelRuntimeLoading),
+    [modelRuntime, modelRuntimeLoading],
+  );
+
+  const refreshBackendStatus = useCallback(async () => {
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000';
 
     try {
-      const [backend, ollama] = await Promise.all([
-        fetchServiceStatus(`${apiUrl}/health`, () => 'Backend online', () => 'Backend offline'),
-        fetchServiceStatus(
-          `${ollamaUrl}/api/tags`,
-          (data: unknown) => {
-            const models = (data as { models?: unknown[] })?.models;
-            return models && models.length > 0 ? 'Ollama ready' : 'Ollama running (no models)';
-          },
-          () => 'Ollama offline',
-        ),
-      ]);
-
-      setBackendStatus(backend);
-      setOllamaStatus(ollama);
-    } finally {
-      setRefreshing(false);
+      const response = await fetch(`${apiUrl}/health`, { cache: 'no-store' });
+      setBackendStatus(response.ok ? 'Backend online' : 'Backend offline');
+    } catch {
+      setBackendStatus('Backend offline');
     }
   }, []);
 
+  const refreshStatus = useCallback(async () => {
+    setRefreshing(true);
+
+    try {
+      await Promise.all([refreshBackendStatus(), onRefreshModelRuntime?.() ?? Promise.resolve()]);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [onRefreshModelRuntime, refreshBackendStatus]);
+
   useEffect(() => {
-    void refreshStatus();
+    void refreshBackendStatus();
     const interval = setInterval(() => {
-      void refreshStatus();
-    }, STATUS_POLL_MS);
+      void refreshBackendStatus();
+    }, BACKEND_STATUS_POLL_MS);
 
     return () => clearInterval(interval);
-  }, [refreshStatus]);
+  }, [refreshBackendStatus]);
 
   return (
     <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
@@ -149,17 +265,47 @@ export function Header({
               {activeSourceCount} source{activeSourceCount === 1 ? '' : 's'} in evidence
             </div>
           ) : null}
+
+          {chatModel ? (
+            <div
+              data-testid="active-chat-model-badge"
+              title="Selected chat model used for generation"
+              className="app-badge px-3 py-1.5"
+              aria-label={`Selected chat model: ${chatModel}`}
+            >
+              Selected chat model: <span className="font-mono">{chatModel}</span>
+            </div>
+          ) : null}
+
+          <div
+            data-testid="model-runtime-header-status"
+            title={runtimeHeaderStatus.title}
+            aria-label={`Model runtime: ${runtimeHeaderStatus.label}`}
+            className={`app-badge flex items-center gap-2 px-3 py-1.5 ${getStatusColor(runtimeHeaderStatus.label)}`}
+          >
+            <span
+              className={`h-2 w-2 shrink-0 rounded-full ${runtimeHeaderStatus.dotClass}`}
+              aria-hidden="true"
+            />
+            <span>{runtimeHeaderStatus.label}</span>
+          </div>
         </div>
       </div>
 
       <div className="flex flex-col gap-3">
         <div className="flex flex-wrap items-center gap-2 text-sm text-gray-300">
-          <div className={`flex items-center gap-2 rounded-full border px-3 py-1.5 ${getStatusColor(backendStatus)}`}>
+          <div
+            data-testid="backend-status-badge"
+            className={`flex items-center gap-2 rounded-full border px-3 py-1.5 ${getStatusColor(backendStatus)}`}
+          >
             <Cpu className="h-4 w-4" />
             <span>{backendStatus}</span>
           </div>
 
-          <div className={`flex items-center gap-2 rounded-full border px-3 py-1.5 ${getStatusColor(ollamaStatus)}`}>
+          <div
+            data-testid="ollama-status-badge"
+            className={`flex items-center gap-2 rounded-full border px-3 py-1.5 ${getStatusColor(ollamaStatus)}`}
+          >
             <Gpu className="h-4 w-4" />
             <span>{ollamaStatus}</span>
           </div>
