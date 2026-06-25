@@ -9,7 +9,7 @@ import type { ModelRuntimeStatus } from '@/types/models';
 
 function formatBytes(bytes?: number): string {
   if (bytes === undefined || bytes === null || Number.isNaN(bytes)) {
-    return '—';
+    return '-';
   }
 
   const units = ['B', 'KB', 'MB', 'GB', 'TB'];
@@ -38,17 +38,7 @@ function usageBarClass(percent?: number) {
   return 'bg-sky-400';
 }
 
-function UsageBar({
-  label,
-  percent,
-  detail,
-  testId,
-}: {
-  label: string;
-  percent?: number;
-  detail?: string;
-  testId: string;
-}) {
+function UsageBar({ label, percent, detail, testId }: { label: string; percent?: number; detail?: string; testId: string }) {
   const safePercent = percent ?? 0;
   const width = Math.min(100, Math.max(0, safePercent));
 
@@ -57,7 +47,7 @@ function UsageBar({
       <div className="mb-1 flex items-center justify-between gap-2 text-xs">
         <span className="text-gray-300">{label}</span>
         <span className="text-gray-400" aria-label={`${label} usage`}>
-          {percent !== undefined ? `${percent.toFixed(1)}%` : '—'}
+          {percent !== undefined ? `${percent.toFixed(1)}%` : '-'}
           {detail ? <span className="ml-1 text-gray-500">({detail})</span> : null}
         </span>
       </div>
@@ -167,7 +157,7 @@ export function HardwareTelemetryPanel({
 
       <p className="mb-3 text-[11px] leading-5 text-gray-500">
         Useful when testing model preload/unload and local inference load.
-        {showVramHint ? ' Active model is loaded — watch VRAM while chatting or preloading.' : null}
+        {showVramHint ? ' Active model is loaded - watch VRAM while chatting or preloading.' : null}
       </p>
 
       {error ? <ErrorMessage message={error} /> : null}

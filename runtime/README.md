@@ -4,10 +4,10 @@ This folder holds local llama.cpp runtime artifacts. Binaries and logs are not c
 
 ## Layout
 
-- `bin/` — place a local `llama-server` binary here (or set `LLAMA_CPP_SERVER_BIN`).
-- `llama.cpp/` — PID file for a locally started `llama-server` process.
-- `logs/` — runtime logs for llama-server, backend, and frontend when started via workspace scripts.
-- `backend.pid` / `frontend.pid` — PID files for processes started by `start.sh` / `start.ps1`.
+- `bin/` - place a local `llama-server` binary here (or set `LLAMA_CPP_SERVER_BIN`).
+- `llama.cpp/` - PID file for a locally started `llama-server` process.
+- `logs/` - runtime logs for llama-server, backend, and frontend when started via workspace scripts.
+- `backend.pid` / `frontend.pid` - PID files for processes started by `start.sh` / `start.ps1`.
 
 ## Zero-Ollama startup (E5)
 

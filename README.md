@@ -2,49 +2,49 @@
 
 ## Project Summary
 
-**Local RAG Workspace** is a local-first, full-stack RAG portfolio project — an engineering artifact built to show how retrieval-augmented generation works end to end, not a hosted “chat with your docs” product.
+**Local RAG Workspace** is a local-first, full-stack RAG portfolio project - an engineering artifact built to show how retrieval-augmented generation works end to end, not a hosted “chat with your docs” product.
 
-|             |                                                                 |
-| ----------- | --------------------------------------------------------------- |
-| **Stack**   | FastAPI · Next.js · Ollama (default) · ChromaDB · SQLite        |
+|                   |                                                                           |
+| ----------------- | ------------------------------------------------------------------------- |
+| **Stack**         | FastAPI · Next.js · Ollama (default) · ChromaDB · SQLite                  |
 | **Also supports** | llama.cpp chat · local embeddings (`local_hash`, `sentence_transformers`) |
-| **Purpose** | Inspectable RAG with sources, pipeline stages, and debug traces |
-| **Runtime** | Single-user, runs entirely on your machine                      |
+| **Purpose**       | Inspectable RAG with sources, pipeline stages, and debug traces           |
+| **Runtime**       | Single-user, runs entirely on your machine                                |
 
 Upload documents, ask grounded questions, constrain retrieval to selected files, stream answers over SSE, and inspect retrieval scores, reranking, prompt assembly, and generation metadata in the UI. Every major pipeline stage is visible in code and in the **Evidence Workspace** panel.
 
 ## Engineering Highlights
 
-- **Structure-aware chunking** — Markdown headings, PDF page metadata, section paths on every chunk
-- **Dense retrieval** — semantic search via embeddings + ChromaDB (Ollama default; local alternatives available)
-- **Optional hybrid BM25 + RRF** — lexical + dense merge for exact-term and identifier matches
-- **Optional heuristic reranking** — local post-retrieval reordering without a cross-encoder dependency
-- **Strict grounded prompting** — answers must cite retrieved context; explicit refusal when evidence is missing
-- **SSE streaming** — token-by-token generation with structured error events
-- **Upload recovery** — SQLite job queue, startup re-enqueue, Chroma rollback on partial failure, frontend retry
-- **Persisted debug metadata** — retrieval/rerank/prompt/generation debug survives page reload in SQLite
-- **Local eval harness** — fixture dataset, recall@k, offline mode with `--fake-embeddings`
-- **Playwright smoke demo** — one local E2E test for upload → chat → sources → persisted debug (not CI)
-- **Optional multi-turn query rewriting** — chat history rewrites the retrieval query only; final answers stay document-grounded
-- **Model Advisor** — hardware-based Ollama model recommendations, runtime status, preload/unload controls
-- **Hardware telemetry** — local CPU/RAM/GPU panel (best-effort; no cloud calls)
-- **Provider abstractions** — swappable LLM and embeddings providers without rewriting the RAG flow
-- **Per-provider Chroma collections** — vectors isolated by embeddings provider to avoid vector-space mismatch
-- **Explicit reindex workflow** — opt-in reindex of registered documents when switching embeddings providers
+- **Structure-aware chunking** - Markdown headings, PDF page metadata, section paths on every chunk
+- **Dense retrieval** - semantic search via embeddings + ChromaDB (Ollama default; local alternatives available)
+- **Optional hybrid BM25 + RRF** - lexical + dense merge for exact-term and identifier matches
+- **Optional heuristic reranking** - local post-retrieval reordering without a cross-encoder dependency
+- **Strict grounded prompting** - answers must cite retrieved context; explicit refusal when evidence is missing
+- **SSE streaming** - token-by-token generation with structured error events
+- **Upload recovery** - SQLite job queue, startup re-enqueue, Chroma rollback on partial failure, frontend retry
+- **Persisted debug metadata** - retrieval/rerank/prompt/generation debug survives page reload in SQLite
+- **Local eval harness** - fixture dataset, recall@k, offline mode with `--fake-embeddings`
+- **Playwright smoke demo** - one local E2E test for upload → chat → sources → persisted debug (not CI)
+- **Optional multi-turn query rewriting** - chat history rewrites the retrieval query only; final answers stay document-grounded
+- **Model Advisor** - hardware-based Ollama model recommendations, runtime status, preload/unload controls
+- **Hardware telemetry** - local CPU/RAM/GPU panel (best-effort; no cloud calls)
+- **Provider abstractions** - swappable LLM and embeddings providers without rewriting the RAG flow
+- **Per-provider Chroma collections** - vectors isolated by embeddings provider to avoid vector-space mismatch
+- **Explicit reindex workflow** - opt-in reindex of registered documents when switching embeddings providers
 
 ## Demo Flow
 
 Use this path for interviews, portfolio walkthroughs, or the Playwright smoke test.
 
 1. **Start Ollama** on the host (`ollama serve`) and pull models (e.g. `llama3.1:8b`, `mxbai-embed-large`).
-2. **Start the backend** — `uvicorn` on port 8000 or Docker `rag-backend` with `OLLAMA_BASE_URL=http://host.docker.internal:11434`.
+2. **Start the backend** - `uvicorn` on port 8000 or Docker `rag-backend` with `OLLAMA_BASE_URL=http://host.docker.internal:11434`.
 3. **Start the frontend** at `http://localhost:3000` (`npm run dev` or Docker `rag-frontend`).
-4. **Upload a fixture document** — e.g. `scripts/eval_data/docs/limitations.md` from the sidebar uploader.
-5. **Wait for indexing** — upload queue reaches completed; document appears under **Indexed documents**.
-6. **Ask a grounded question** — e.g. _“Does PDF handling include OCR?”_ with the document selected.
-7. **Inspect sources and debug** — open **Evidence Workspace → Sources** and **Debug** (retrieval, used-in-prompt chunks, optional query rewrite).
-8. **Reload the page** — confirm chat history and debug metadata persist on the assistant message.
-9. **Run the smoke demo** (optional) — from `frontend/`: `npm run test:e2e` (requires Ollama, backend, and frontend running).
+4. **Upload a fixture document** - e.g. `scripts/eval_data/docs/limitations.md` from the sidebar uploader.
+5. **Wait for indexing** - upload queue reaches completed; document appears under **Indexed documents**.
+6. **Ask a grounded question** - e.g. _“Does PDF handling include OCR?”_ with the document selected.
+7. **Inspect sources and debug** - open **Evidence Workspace → Sources** and **Debug** (retrieval, used-in-prompt chunks, optional query rewrite).
+8. **Reload the page** - confirm chat history and debug metadata persist on the assistant message.
+9. **Run the smoke demo** (optional) - from `frontend/`: `npm run test:e2e` (requires Ollama, backend, and frontend running).
 
 For follow-up rewriting, set `ENABLE_QUERY_REWRITING=true` in `backend/.env`, restart the backend, ask a first question in a chat, then a pronoun-style follow-up (e.g. _“Is it enabled by default?”_) and check **Query Rewriting** in the Debug tab.
 
@@ -97,14 +97,14 @@ Question flow
 
 ## Persistence model
 
-Data is split across four stores (no distributed transactions — consistency is application-managed):
+Data is split across four stores (no distributed transactions - consistency is application-managed):
 
-| Store | Role |
-| ----- | ---- |
-| **Filesystem** (`storage/docs/`) | Raw uploaded files |
-| **JSON registry** (`storage/registry.json`) | Document metadata (`id`, filename, path, chunk count) |
-| **SQLite** (`storage/app.db`) | Chats, messages, upload jobs, persisted debug JSON |
-| **ChromaDB** (`vector_db/`) | Embeddings and chunk metadata (per-provider collections when configured) |
+| Store                                       | Role                                                                     |
+| ------------------------------------------- | ------------------------------------------------------------------------ |
+| **Filesystem** (`storage/docs/`)            | Raw uploaded files                                                       |
+| **JSON registry** (`storage/registry.json`) | Document metadata (`id`, filename, path, chunk count)                    |
+| **SQLite** (`storage/app.db`)               | Chats, messages, upload jobs, persisted debug JSON                       |
+| **ChromaDB** (`vector_db/`)                 | Embeddings and chunk metadata (per-provider collections when configured) |
 
 **Upload recovery:** Jobs are tracked in SQLite. On restart, `queued` / `processing` jobs are re-enqueued. Failed registry writes roll back Chroma vectors. Document delete removes vectors (all known collections) → file → registry, with safe partial-failure handling.
 
@@ -114,8 +114,8 @@ Data is split across four stores (no distributed transactions — consistency is
 
 - Structured debug on every RAG request: retrieval scores, rerank details, prompt assembly, timings, token estimates
 - Debug metadata persisted on assistant messages in SQLite and survives reload
-- `GET /health` — liveness; `GET /health/ready` — SQLite, Chroma, upload worker, embeddings, reconciliation
-- `GET /debug/metrics` — in-process counters (uploads, indexing, streams, reconciliation, cache hits)
+- `GET /health` - liveness; `GET /health/ready` - SQLite, Chroma, upload worker, embeddings, reconciliation
+- `GET /debug/metrics` - in-process counters (uploads, indexing, streams, reconciliation, cache hits)
 - API errors are sanitized (no absolute paths in client responses); full details stay in server logs
 - SSE stream errors use structured `{ type: "error", message, code, recoverable }` events
 
@@ -212,16 +212,16 @@ That gives the project a measurable path for comparing chunking, retrieval, and 
 
 ## Repository layout
 
-| Path | Purpose |
-| ---- | ------- |
-| `backend/` | FastAPI app, RAG pipeline, providers, services |
-| `frontend/` | Next.js UI, Evidence Workspace, Model Advisor, E2E tests |
-| `scripts/` | Eval, validation, startup, reindex, model download, benchmarks |
-| `tests/` | Pytest suite (API, ingestion, retrieval, providers, scripts) |
-| `runtime/` | llama-server binary location, PID/log files (gitignored artifacts) |
-| `models/demo/` | Demo GGUF manifest and model file (not committed) |
-| `storage/` | Local uploads, registry, SQLite (gitignored user data) |
-| `vector_db/` | Chroma persistence (gitignored) |
+| Path           | Purpose                                                            |
+| -------------- | ------------------------------------------------------------------ |
+| `backend/`     | FastAPI app, RAG pipeline, providers, services                     |
+| `frontend/`    | Next.js UI, Evidence Workspace, Model Advisor, E2E tests           |
+| `scripts/`     | Eval, validation, startup, reindex, model download, benchmarks     |
+| `tests/`       | Pytest suite (API, ingestion, retrieval, providers, scripts)       |
+| `runtime/`     | llama-server binary location, PID/log files (gitignored artifacts) |
+| `models/demo/` | Demo GGUF manifest and model file (not committed)                  |
+| `storage/`     | Local uploads, registry, SQLite (gitignored user data)             |
+| `vector_db/`   | Chroma persistence (gitignored)                                    |
 
 ## Local Development
 
@@ -354,20 +354,20 @@ Defaults remain **`LLM_PROVIDER=ollama`** and **`EMBEDDINGS_PROVIDER=ollama`**. 
 
 ### LLM providers
 
-| Provider | Description | Ollama required |
-| -------- | ----------- | --------------- |
-| `ollama` (default) | Chat, streaming, query rewrite, runtime preload/unload | Yes |
-| `llama_cpp` | Local chat via OpenAI-compatible `llama-server` HTTP | No |
+| Provider           | Description                                            | Ollama required |
+| ------------------ | ------------------------------------------------------ | --------------- |
+| `ollama` (default) | Chat, streaming, query rewrite, runtime preload/unload | Yes             |
+| `llama_cpp`        | Local chat via OpenAI-compatible `llama-server` HTTP   | No              |
 
 The backend routes chat, streaming, query rewrite, and runtime operations through an `LLMProvider` abstraction. Planned but not implemented: `embedded_llamacpp`, `openai_compatible`, `lmstudio`, `localai`.
 
 ### Embeddings providers
 
-| Provider | Description | Ollama required |
-| -------- | ----------- | --------------- |
-| `ollama` (default) | High-quality semantic embeddings | Yes |
-| `local_hash` | Dependency-free demo vectors (not semantically meaningful) | No |
-| `sentence_transformers` | Better local semantic retrieval when installed and cached locally | No |
+| Provider                | Description                                                       | Ollama required |
+| ----------------------- | ----------------------------------------------------------------- | --------------- |
+| `ollama` (default)      | High-quality semantic embeddings                                  | Yes             |
+| `local_hash`            | Dependency-free demo vectors (not semantically meaningful)        | No              |
+| `sentence_transformers` | Better local semantic retrieval when installed and cached locally | No              |
 
 ```env
 EMBEDDINGS_PROVIDER=ollama
@@ -382,14 +382,14 @@ pip install -r backend/requirements-embeddings.txt
 python scripts/check_sentence_transformers_embeddings.py --strict
 ```
 
-`SENTENCE_TRANSFORMERS_LOCAL_FILES_ONLY=true` by default — no silent model download.
+`SENTENCE_TRANSFORMERS_LOCAL_FILES_ONLY=true` by default - no silent model download.
 
 ### Chroma collection strategy
 
 By default (`CHROMA_COLLECTION_STRATEGY=per_embedding_provider`), vectors are stored in provider-specific collections (e.g. `rag_local_hash_local_hash_v1_384`) so switching embeddings providers does not query a shared incompatible index.
 
-- **`per_embedding_provider`** (default) — isolated collections per provider/model/dimension
-- **`legacy_single`** — all vectors in `CHROMA_DEFAULT_COLLECTION` (`rag_chat`) for backward compatibility
+- **`per_embedding_provider`** (default) - isolated collections per provider/model/dimension
+- **`legacy_single`** - all vectors in `CHROMA_DEFAULT_COLLECTION` (`rag_chat`) for backward compatibility
 
 Document delete removes vectors from **all** known collections. No automatic migration or reindex on provider switch.
 
@@ -408,15 +408,15 @@ python scripts/reindex_documents.py --run --yes
 python scripts/reindex_documents.py --run --yes --force
 ```
 
-API: `POST /documents/reindex` — defaults to `dry_run=true`. Use `{"dry_run": false}` to execute.
+API: `POST /documents/reindex` - defaults to `dry_run=true`. Use `{"dry_run": false}` to execute.
 
 Reindex reloads registered files, reuses existing chunking, writes to the active collection only, and preserves raw files and registry entries.
 
 Inspect collection status via:
 
-- `GET /models/runtime` — `embeddings.collection` and `embeddings.reindex` blocks
-- `GET /health/ready` — `checks.embeddings.collection` and reindex guidance
-- `GET /debug/embeddings` — full diagnostics
+- `GET /models/runtime` - `embeddings.collection` and `embeddings.reindex` blocks
+- `GET /health/ready` - `checks.embeddings.collection` and reindex guidance
+- `GET /debug/embeddings` - full diagnostics
 
 ## Zero-Ollama llama.cpp setup
 
@@ -475,23 +475,23 @@ Default demo model metadata points to **Qwen2.5 1.5B Instruct GGUF** (`Q4_K_M`).
 
 ## API reference (local diagnostics)
 
-| Endpoint | Purpose |
-| -------- | ------- |
-| `GET /health` | Process liveness |
-| `GET /health/ready` | Dependency readiness (`ok`, `degraded`, or `error`) |
-| `GET /debug/reconciliation` | Persistence drift report (read-only) |
-| `POST /debug/reconciliation/repair` | Repair plan (dry-run by default) |
-| `GET /debug/embeddings` | Embeddings/collection diagnostics and reindex guidance |
-| `GET /debug/metrics` | In-process counters (resets on restart) |
-| `POST /documents/reindex` | Reindex plan or run (dry-run by default) |
-| `POST /models/recommendations` | Hardware-based model recommendations |
-| `GET /models/catalog` | Curated local model catalog |
-| `GET /models/settings` | Active chat model settings |
-| `PUT /models/settings` | Set chat model (no automatic `ollama pull`) |
-| `GET /models/runtime` | LLM + embeddings runtime status |
-| `POST /models/runtime/preload` | Preload active chat model |
-| `POST /models/runtime/unload` | Unload active model from memory |
-| `GET /hardware/telemetry` | Local CPU/RAM/GPU telemetry |
+| Endpoint                            | Purpose                                                |
+| ----------------------------------- | ------------------------------------------------------ |
+| `GET /health`                       | Process liveness                                       |
+| `GET /health/ready`                 | Dependency readiness (`ok`, `degraded`, or `error`)    |
+| `GET /debug/reconciliation`         | Persistence drift report (read-only)                   |
+| `POST /debug/reconciliation/repair` | Repair plan (dry-run by default)                       |
+| `GET /debug/embeddings`             | Embeddings/collection diagnostics and reindex guidance |
+| `GET /debug/metrics`                | In-process counters (resets on restart)                |
+| `POST /documents/reindex`           | Reindex plan or run (dry-run by default)               |
+| `POST /models/recommendations`      | Hardware-based model recommendations                   |
+| `GET /models/catalog`               | Curated local model catalog                            |
+| `GET /models/settings`              | Active chat model settings                             |
+| `PUT /models/settings`              | Set chat model (no automatic `ollama pull`)            |
+| `GET /models/runtime`               | LLM + embeddings runtime status                        |
+| `POST /models/runtime/preload`      | Preload active chat model                              |
+| `POST /models/runtime/unload`       | Unload active model from memory                        |
+| `GET /hardware/telemetry`           | Local CPU/RAM/GPU telemetry                            |
 
 Example model recommendation:
 
@@ -522,8 +522,8 @@ Optional Ollama runtime config: `OLLAMA_KEEP_ALIVE=5m`, `OLLAMA_PRELOAD_TIMEOUT_
 
 `ANSWER_MODE` controls how the model uses retrieved documents:
 
-- **`strict_rag`** (default) — answers use only retrieved document context
-- **`hybrid_assistant`** — documents are highest priority; general knowledge allowed when context is insufficient
+- **`strict_rag`** (default) - answers use only retrieved document context
+- **`hybrid_assistant`** - documents are highest priority; general knowledge allowed when context is insufficient
 
 Optional multi-turn query rewriting (`ENABLE_QUERY_REWRITING=true`) rewrites the retrieval query from chat history. Final answers remain document-grounded in `strict_rag` mode.
 
@@ -560,15 +560,15 @@ cd frontend && npm run build
 cd frontend && npm run test:e2e
 ```
 
-| Command | What it verifies |
-| ------- | ---------------- |
-| `python -m pytest` | API, ingestion, retrieval, upload recovery, reindex, providers |
-| `python scripts/validate_backend.py` | Pytest + offline eval + retrieval benchmark |
-| `python scripts/validate_backend.py --fast` | Pytest only (faster) |
-| `python scripts/eval.py --skip-generation --fake-embeddings` | Retrieval recall@k (no Ollama) |
-| `python scripts/reindex_documents.py --dry-run --direct` | Reindex plan without running backend |
-| `cd frontend && npm run build` | Next.js production build and TypeScript |
-| `cd frontend && npm run test:e2e` | Playwright suite (Ollama + backend + frontend required) |
+| Command                                                      | What it verifies                                               |
+| ------------------------------------------------------------ | -------------------------------------------------------------- |
+| `python -m pytest`                                           | API, ingestion, retrieval, upload recovery, reindex, providers |
+| `python scripts/validate_backend.py`                         | Pytest + offline eval + retrieval benchmark                    |
+| `python scripts/validate_backend.py --fast`                  | Pytest only (faster)                                           |
+| `python scripts/eval.py --skip-generation --fake-embeddings` | Retrieval recall@k (no Ollama)                                 |
+| `python scripts/reindex_documents.py --dry-run --direct`     | Reindex plan without running backend                           |
+| `cd frontend && npm run build`                               | Next.js production build and TypeScript                        |
+| `cd frontend && npm run test:e2e`                            | Playwright suite (Ollama + backend + frontend required)        |
 
 One-command shortcuts:
 
@@ -588,8 +588,8 @@ RUN_LIVE_TESTS=true python -m pytest tests/live/
 
 ### Eval report vs full eval
 
-- **Fake embeddings + skip-generation** — deterministic offline validation; no Ollama required. Best for portfolio artifacts.
-- **Full eval** — requires Ollama with configured embed and chat models; generation output may vary.
+- **Fake embeddings + skip-generation** - deterministic offline validation; no Ollama required. Best for portfolio artifacts.
+- **Full eval** - requires Ollama with configured embed and chat models; generation output may vary.
 
 `tttsss/eval_report.md` is a local generated artifact and can be regenerated at any time.
 
@@ -599,11 +599,11 @@ Ollama on the host, backend on `:8000`, frontend on `http://localhost:3000`. Fir
 
 ### Ollama and URL notes
 
-| Runtime | Backend `OLLAMA_BASE_URL` | Frontend URL | Notes |
-| ------- | ------------------------- | ------------ | ----- |
-| Backend on host | `http://localhost:11434` | `http://localhost:3000` | Default local development |
-| Backend in Docker | `http://host.docker.internal:11434` | `http://localhost:3000` | Ollama on the host |
-| Browser access | n/a | `http://localhost:3000` | Avoid `127.0.0.1:3000` unless `CORS_ORIGINS` includes it |
+| Runtime           | Backend `OLLAMA_BASE_URL`           | Frontend URL            | Notes                                                    |
+| ----------------- | ----------------------------------- | ----------------------- | -------------------------------------------------------- |
+| Backend on host   | `http://localhost:11434`            | `http://localhost:3000` | Default local development                                |
+| Backend in Docker | `http://host.docker.internal:11434` | `http://localhost:3000` | Ollama on the host                                       |
+| Browser access    | n/a                                 | `http://localhost:3000` | Avoid `127.0.0.1:3000` unless `CORS_ORIGINS` includes it |
 
 ## Why no CI/CD
 
@@ -613,15 +613,15 @@ This is a portfolio project meant to run locally and be discussed in interviews.
 
 Current boundaries (intentionally visible, not hidden):
 
-- **No authentication or multi-tenancy** — single-user local workspace only
-- **No OCR or layout-aware PDF parsing** — text extraction via PyPDF only
-- **Heuristic follow-up detection** for query rewriting — pattern-based, not a classifier
-- **BM25 cache scoped per collection** — still rebuilt from Chroma corpus at scale
-- **In-process ingestion and reindex** — not a durable external queue
-- **Heuristic reranking** — not a learned cross-encoder
-- **Split persistence without distributed transactions** — Chroma, SQLite, registry, filesystem
-- **Small eval harness** — fixture-based, not a production benchmark suite
-- **No production deployment hardening** — secrets, scaling, monitoring, and CI/CD left for a product phase
+- **No authentication or multi-tenancy** - single-user local workspace only
+- **No OCR or layout-aware PDF parsing** - text extraction via PyPDF only
+- **Heuristic follow-up detection** for query rewriting - pattern-based, not a classifier
+- **BM25 cache scoped per collection** - still rebuilt from Chroma corpus at scale
+- **In-process ingestion and reindex** - not a durable external queue
+- **Heuristic reranking** - not a learned cross-encoder
+- **Split persistence without distributed transactions** - Chroma, SQLite, registry, filesystem
+- **Small eval harness** - fixture-based, not a production benchmark suite
+- **No production deployment hardening** - secrets, scaling, monitoring, and CI/CD left for a product phase
 
 Reasonable next steps:
 

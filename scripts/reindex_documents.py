@@ -172,7 +172,7 @@ def main(argv: list[str] | None = None) -> int:
     for item in result.get("documents", []):
         print(
             f"- {item.get('filename')} ({item.get('document_id')}): "
-            f"{item.get('status')} — {item.get('reason')}"
+            f"{item.get('status')} - {item.get('reason')}"
         )
     return 0
 

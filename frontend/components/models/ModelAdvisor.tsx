@@ -129,9 +129,9 @@ function embeddingIndexLabel(status: string | undefined): string {
     case 'ok':
       return 'OK';
     case 'mixed':
-      return 'Mixed providers — reindex recommended';
+      return 'Mixed providers - reindex recommended';
     case 'legacy':
-      return 'Legacy metadata — reindex recommended';
+      return 'Legacy metadata - reindex recommended';
     case 'empty':
       return 'Empty';
     case 'error':
@@ -435,20 +435,15 @@ export function ModelAdvisor({
                           ? 'Ollama'
                           : runtime.embeddings.provider}
                   </span>
-                  {runtime.embeddings.model ? (
-                    <span className="text-gray-400"> · {runtime.embeddings.model}</span>
-                  ) : null}
+                  {runtime.embeddings.model ? <span className="text-gray-400"> · {runtime.embeddings.model}</span> : null}
                 </p>
               ) : null}
               {runtime?.embeddings?.provider === 'local_hash' ? (
                 <p className="text-[11px] leading-5 text-amber-200/90" data-testid="model-runtime-embeddings-warning">
-                  Demo-quality local embeddings. For better semantic retrieval, configure Ollama or a stronger
-                  embedding provider.
+                  Demo-quality local embeddings. For better semantic retrieval, configure Ollama or a stronger embedding provider.
                 </p>
               ) : null}
-              {runtime?.embeddings?.provider === 'sentence_transformers' &&
-              runtime.embeddings.status &&
-              runtime.embeddings.status !== 'ok' ? (
+              {runtime?.embeddings?.provider === 'sentence_transformers' && runtime.embeddings.status && runtime.embeddings.status !== 'ok' ? (
                 <p className="text-[11px] leading-5 text-amber-200/90" data-testid="model-runtime-embeddings-st-warning">
                   Install/cache the sentence-transformers model, or use local_hash for dependency-free demo mode.
                   {runtime.embeddings.message ? ` ${runtime.embeddings.message}` : ''}
@@ -456,55 +451,32 @@ export function ModelAdvisor({
               ) : null}
               {runtime?.embeddings?.collection ? (
                 <p data-testid="model-runtime-embedding-index">
-                  Embedding index:{' '}
-                  <span className="text-white">
-                    {embeddingIndexLabel(runtime.embeddings.collection.status)}
-                  </span>
+                  Embedding index: <span className="text-white">{embeddingIndexLabel(runtime.embeddings.collection.status)}</span>
                 </p>
               ) : null}
               {runtime?.embeddings?.collection?.strategy ? (
                 <p data-testid="model-runtime-chroma-strategy">
-                  Chroma strategy:{' '}
-                  <span className="text-white">{runtime.embeddings.collection.strategy}</span>
+                  Chroma strategy: <span className="text-white">{runtime.embeddings.collection.strategy}</span>
                   {runtime.embeddings.collection.active_collection ? (
-                    <span className="text-gray-400">
-                      {' '}
-                      · {runtime.embeddings.collection.active_collection}
-                    </span>
+                    <span className="text-gray-400"> · {runtime.embeddings.collection.active_collection}</span>
                   ) : null}
                 </p>
               ) : null}
               {runtime?.embeddings?.collection?.strategy === 'per_embedding_provider' ? (
-                <p
-                  className="text-[11px] leading-5 text-gray-500"
-                  data-testid="model-runtime-collection-isolation"
-                >
-                  Vectors are isolated per embeddings provider so switching providers does not
-                  query incompatible vector spaces.
+                <p className="text-[11px] leading-5 text-gray-500" data-testid="model-runtime-collection-isolation">
+                  Vectors are isolated per embeddings provider so switching providers does not query incompatible vector spaces.
                 </p>
               ) : null}
-              {runtime?.embeddings?.collection?.reindex_recommended ||
-              runtime?.embeddings?.reindex?.recommended ? (
-                <p
-                  className="text-[11px] leading-5 text-amber-200/90"
-                  data-testid="model-runtime-reindex-warning"
-                >
+              {runtime?.embeddings?.collection?.reindex_recommended || runtime?.embeddings?.reindex?.recommended ? (
+                <p className="text-[11px] leading-5 text-amber-200/90" data-testid="model-runtime-reindex-warning">
                   {runtime.embeddings.reindex?.message ||
                     'Reindex recommended for the active embeddings provider. Run a dry-run first, then reindex when ready.'}
-                  {runtime.embeddings.collection?.message
-                    ? ` ${runtime.embeddings.collection.message}`
-                    : ''}
+                  {runtime.embeddings.collection?.message ? ` ${runtime.embeddings.collection.message}` : ''}
                 </p>
               ) : null}
               {runtime?.embeddings?.reindex?.recommended ? (
-                <p
-                  className="text-[11px] leading-5 text-gray-500"
-                  data-testid="model-runtime-reindex-command"
-                >
-                  Dry-run:{' '}
-                  <span className="font-mono text-gray-300">
-                    {runtime.embeddings.reindex.dry_run_command}
-                  </span>
+                <p className="text-[11px] leading-5 text-gray-500" data-testid="model-runtime-reindex-command">
+                  Dry-run: <span className="font-mono text-gray-300">{runtime.embeddings.reindex.dry_run_command}</span>
                 </p>
               ) : null}
               <p>
@@ -558,16 +530,16 @@ export function ModelAdvisor({
               {runtimeActionLoading === 'preload' ? 'Preloading…' : 'Preload active model'}
             </button>
             {runtime?.runtime.unload_supported !== false ? (
-            <button
-              type="button"
-              data-testid="model-runtime-unload"
-              aria-label="Unload active chat model from memory"
-              disabled={isStreaming || runtimeActionLoading !== null}
-              onClick={() => void handleUnload()}
-              className="focus-ring rounded-full border border-amber-500/40 bg-amber-500/15 px-3 py-1.5 text-xs text-amber-100 transition hover:bg-amber-500/25 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {runtimeActionLoading === 'unload' ? 'Unloading…' : 'Unload active model'}
-            </button>
+              <button
+                type="button"
+                data-testid="model-runtime-unload"
+                aria-label="Unload active chat model from memory"
+                disabled={isStreaming || runtimeActionLoading !== null}
+                onClick={() => void handleUnload()}
+                className="focus-ring rounded-full border border-amber-500/40 bg-amber-500/15 px-3 py-1.5 text-xs text-amber-100 transition hover:bg-amber-500/25 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {runtimeActionLoading === 'unload' ? 'Unloading…' : 'Unload active model'}
+              </button>
             ) : null}
           </div>
         </div>

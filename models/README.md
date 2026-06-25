@@ -36,7 +36,7 @@ Downloads are **opt-in only**. The backend and frontend never download models au
 
 Manifest fields:
 
-- `models/demo/model-manifest.json` — download URL, recommended repo/file, optional `sha256`
+- `models/demo/model-manifest.json` - download URL, recommended repo/file, optional `sha256`
 - Local filename remains `model.gguf` even when the upstream file has a longer name
 
 Checksum behavior:
