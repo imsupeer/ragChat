@@ -29,10 +29,18 @@ class LexicalSearchCache:
             return self._revision
 
     @staticmethod
-    def cache_key(document_ids: Optional[list[str]]) -> str:
+    def cache_key(
+        document_ids: Optional[list[str]],
+        *,
+        collection_name: str = "",
+    ) -> str:
         if not document_ids:
-            return "all"
-        return ",".join(sorted(document_ids))
+            scope = "all"
+        else:
+            scope = ",".join(sorted(document_ids))
+        if collection_name:
+            return f"{collection_name}:{scope}"
+        return scope
 
     @staticmethod
     def filter_documents(
@@ -56,8 +64,9 @@ class LexicalSearchCache:
         k: int,
         document_ids: Optional[list[str]],
         load_corpus: Callable[[], list[Document]],
+        collection_name: str = "",
     ) -> tuple[list[tuple[Document, float]], dict[str, object]]:
-        cache_key = self.cache_key(document_ids)
+        cache_key = self.cache_key(document_ids, collection_name=collection_name)
         corpus_cache_hit = False
         index_cache_hit = False
         corpus_size = 0

@@ -9,10 +9,12 @@ from services.query_rewriter import QueryRewriter
 
 def build_chat_service():
     chroma_service = MagicMock()
-    ollama_service = MagicMock()
+    llm_provider = MagicMock()
+    llm_provider.model = "test-model"
+    llm_provider.keep_alive = "5m"
     service = ChatService(
         chroma_service=chroma_service,
-        ollama_service=ollama_service,
+        llm_provider=llm_provider,
         top_k=3,
         max_context_chunks=3,
     )

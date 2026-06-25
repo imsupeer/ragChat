@@ -81,13 +81,13 @@ export async function assertDebugUsedInPrompt(page: Page) {
 }
 
 export async function createFreshChat(page: Page) {
-  await expect(page.getByRole('button', { name: 'New Chat' })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByTestId('chat-new-session')).toBeVisible({ timeout: 30_000 });
   await expect(page.locator('.animate-pulse')).toHaveCount(0, { timeout: 30_000 });
 
   const createChatResponse = page.waitForResponse(
     (response) => response.url().includes('/chats') && response.request().method() === 'POST' && response.ok(),
   );
-  await page.getByRole('button', { name: 'New Chat' }).click();
+  await page.getByTestId('chat-new-session').click();
   await createChatResponse;
 
   await expect(page.getByTestId('chat-empty-state')).toBeVisible({ timeout: 30_000 });

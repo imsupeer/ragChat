@@ -9,6 +9,7 @@ from services.model_names import model_matches_installed
 from services.model_runtime import ModelRuntimeError, ModelRuntimeService
 from services.model_settings import ModelSettingsService
 from services.ollama_service import OllamaService
+from services.providers.ollama_provider import OllamaProvider
 
 
 class FakeOllamaRuntime(OllamaService):
@@ -92,7 +93,7 @@ def runtime_stack(tmp_path: Path):
     )
     ollama = FakeOllamaRuntime(running=["llama3.1:8b"])
     runtime = ModelRuntimeService(
-        ollama_service=ollama,
+        llm_provider=OllamaProvider(ollama),
         model_settings=settings,
         keep_alive="5m",
     )
@@ -111,6 +112,8 @@ def test_runtime_status_with_ollama_reachable(runtime_stack):
     assert status["runtime"]["keep_alive"] == "5m"
     assert status["runtime"]["running_models_count"] == 1
     assert status["runtime"]["loaded_detection"] == "available"
+    assert status["provider"]["name"] == "ollama"
+    assert status["provider"]["capabilities"]["preload"] is True
 
 
 def test_runtime_status_with_ollama_unavailable(tmp_path: Path):
@@ -122,7 +125,7 @@ def test_runtime_status_with_ollama_unavailable(tmp_path: Path):
     )
     ollama = FakeOllamaRuntime(reachable=False)
     runtime = ModelRuntimeService(
-        ollama_service=ollama,
+        llm_provider=OllamaProvider(ollama),
         model_settings=settings,
         keep_alive="5m",
     )
@@ -215,7 +218,7 @@ def test_preload_ollama_unavailable(tmp_path: Path):
         catalog_loader=load_model_catalog,
     )
     runtime = ModelRuntimeService(
-        ollama_service=FakeOllamaRuntime(reachable=False),
+        llm_provider=OllamaProvider(FakeOllamaRuntime(reachable=False)),
         model_settings=settings,
         keep_alive="5m",
     )

@@ -35,14 +35,23 @@ class FakeChromaService:
         counts: dict[str, int] | None = None,
         *,
         should_fail: bool = False,
+        collections: dict[str, dict[str, int]] | None = None,
+        collection_name: str = "rag_chat",
     ) -> None:
         self.counts = dict(counts or {})
+        self.collections = dict(collections or {collection_name: dict(counts or {})})
         self.should_fail = should_fail
+        self.collection_name = collection_name
 
     def list_document_ids_with_vector_counts(self) -> dict[str, int]:
         if self.should_fail:
             raise RuntimeError("Chroma unavailable")
         return dict(self.counts)
+
+    def summarize_collections(self) -> dict[str, dict[str, int]]:
+        if self.should_fail:
+            raise RuntimeError("Chroma unavailable")
+        return {name: dict(doc_counts) for name, doc_counts in self.collections.items()}
 
 
 def build_service(
@@ -88,8 +97,28 @@ def test_clean_state_returns_ok(tmp_path: Path):
     report = service.run_report()
 
     assert report["status"] == "ok"
+    assert report["summary"]["chroma_documents"] == 1
     assert report["summary"]["issues"] == 0
     assert report["issues"] == []
+
+
+def test_reconciliation_includes_chroma_collections(tmp_path: Path):
+    service, _, _ = build_service(
+        tmp_path,
+        registry_entries=[],
+        chroma_counts={"doc-1": 1},
+    )
+    service.chroma_service.collections = {
+        "rag_chat": {"doc-legacy": 2},
+        "rag_local_hash_local_hash_v1_384": {"doc-1": 1},
+    }
+    service.chroma_service.collection_name = "rag_local_hash_local_hash_v1_384"
+
+    report = service.run_report()
+
+    assert report["summary"]["active_chroma_collection"] == "rag_local_hash_local_hash_v1_384"
+    assert "rag_chat" in report["summary"]["chroma_collections"]
+    assert report["summary"]["chroma_collections"]["rag_chat"]["doc-legacy"] == 2
 
 
 def test_registry_missing_file_is_detected(tmp_path: Path):

@@ -9,9 +9,12 @@ from services.chat_service import ChatService
 def build_chat_service(*, answer_mode: str = "strict_rag") -> ChatService:
     chroma_service = MagicMock()
     ollama_service = MagicMock()
+    llm_provider = ollama_service
+    llm_provider.model = "test-model"
+    llm_provider.keep_alive = "5m"
     service = ChatService(
         chroma_service=chroma_service,
-        ollama_service=ollama_service,
+        llm_provider=llm_provider,
         top_k=3,
         max_context_chunks=3,
         answer_mode=answer_mode,

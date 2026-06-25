@@ -85,6 +85,7 @@ export function ChatSessionList({
     <div className="space-y-2">
       <button
         type="button"
+        data-testid="chat-new-session"
         onClick={onCreate}
         className="focus-ring flex w-full items-center justify-center gap-2 rounded-2xl border border-border bg-white/[0.04] px-3 py-2.5 text-sm transition hover:border-sky-500/30 hover:bg-white/[0.07]"
       >

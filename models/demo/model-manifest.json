@@ -1,0 +1,19 @@
+{
+  "id": "demo-gguf",
+  "display_name": "Qwen2.5 1.5B Instruct GGUF Demo",
+  "provider": "llama_cpp",
+  "model_file": "model.gguf",
+  "recommended_repo": "Qwen/Qwen2.5-1.5B-Instruct-GGUF",
+  "recommended_file": "qwen2.5-1.5b-instruct-q4_k_m.gguf",
+  "download_url": "https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF/resolve/main/qwen2.5-1.5b-instruct-q4_k_m.gguf",
+  "sha256": "",
+  "size_bytes": null,
+  "context_size": 4096,
+  "quantization": "Q4_K_M",
+  "license_note": "Qwen2.5 is subject to the Qwen license and model card on Hugging Face. Demo quality is suitable for testing, not high-end reasoning.",
+  "notes": [
+    "Small demo model for local llama.cpp runtime.",
+    "Run: python scripts/download_demo_model.py",
+    "Quality is suitable for demo/testing, not high-end reasoning."
+  ]
+}

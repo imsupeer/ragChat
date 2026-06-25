@@ -120,7 +120,7 @@ async def iter_chat_stream_events(
 
         generation_started = perf_counter()
 
-        stream_iter = chat_service.ollama_service.stream(prepared["prompt"]).__aiter__()
+        stream_iter = chat_service.llm_provider.stream(prepared["prompt"]).__aiter__()
         while True:
             if await request.is_disconnected():
                 client_disconnected = True
@@ -137,10 +137,10 @@ async def iter_chat_stream_events(
         if client_disconnected:
             generation_finished = perf_counter()
             generation_debug = build_cancelled_generation_debug(
-                model=chat_service.ollama_service.model,
+                model=chat_service.llm_provider.model,
                 output_text=full_answer,
                 latency_ms=elapsed_ms(generation_started, generation_finished),
-                keep_alive=chat_service.ollama_service.keep_alive,
+                keep_alive=chat_service.llm_provider.keep_alive,
             )
             log_structured(
                 "rag.generation.cancelled",
@@ -171,10 +171,10 @@ async def iter_chat_stream_events(
 
         generation_finished = perf_counter()
         generation_debug = build_generation_debug(
-            model=chat_service.ollama_service.model,
+            model=chat_service.llm_provider.model,
             output_text=full_answer,
             latency_ms=elapsed_ms(generation_started, generation_finished),
-            keep_alive=chat_service.ollama_service.keep_alive,
+            keep_alive=chat_service.llm_provider.keep_alive,
         )
         generation_debug["status"] = "completed"
         log_structured("rag.generation", prepared["trace_id"], generation_debug)
@@ -239,12 +239,12 @@ async def iter_chat_stream_events(
             else 0.0
         )
         generation_debug = build_failed_generation_debug(
-            model=chat_service.ollama_service.model,
+            model=chat_service.llm_provider.model,
             output_text=full_answer,
             latency_ms=generation_latency_ms,
             error_code=error_code,
             error_message=safe_message,
-            keep_alive=chat_service.ollama_service.keep_alive,
+            keep_alive=chat_service.llm_provider.keep_alive,
         )
         debug = {
             **prepared["debug"],

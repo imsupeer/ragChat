@@ -1,46 +1,131 @@
 from collections.abc import AsyncIterator
+from typing import Any
+
+from services.llm_provider import LLMProviderCapabilities
+from services.providers.ollama_provider import OllamaProvider
 
 
-class FakeOllamaService:
+class FakeLLMProvider:
     def __init__(self, tokens=None, fail: bool = False) -> None:
         self.model = "test-model"
+        self.keep_alive = "5m"
+        self.provider_name = "ollama"
+        self.display_name = "Ollama"
         self.tokens = tokens or ["Hello", " world"]
         self.fail = fail
 
-    async def generate(self, prompt: str) -> str:
+    @property
+    def capabilities(self) -> LLMProviderCapabilities:
+        return LLMProviderCapabilities(
+            chat=True,
+            streaming=True,
+            list_installed_models=True,
+            list_running_models=True,
+            preload=True,
+            unload=True,
+            keep_alive=True,
+        )
+
+    async def generate(self, prompt: str, model: str | None = None) -> str:
+        del prompt, model
         if self.fail:
-            raise RuntimeError("Ollama unavailable")
+            raise RuntimeError("LLM unavailable")
         return "".join(self.tokens)
 
-    async def stream(self, prompt: str) -> AsyncIterator[str]:
+    async def stream(self, prompt: str, model: str | None = None) -> AsyncIterator[str]:
+        del prompt, model
         if self.fail:
-            raise RuntimeError("Ollama unavailable")
+            raise RuntimeError("LLM unavailable")
         for token in self.tokens:
             yield token
 
-
-class FakeChromaService:
-    def __init__(
+    async def chat(
         self,
-        counts: dict[str, int] | None = None,
         *,
-        should_fail: bool = False,
-    ) -> None:
-        self.counts = dict(counts or {})
-        self.should_fail = should_fail
-        self.added: list[tuple[str, int]] = []
-        self.deleted: list[str] = []
+        model: str,
+        messages: list[dict[str, str]],
+        options: dict[str, Any] | None = None,
+        keep_alive: str | None = None,
+    ) -> dict[str, Any]:
+        del model, messages, options, keep_alive
+        content = await self.generate("")
+        return {"message": {"role": "assistant", "content": content}}
 
-    def list_document_ids_with_vector_counts(self) -> dict[str, int]:
-        if self.should_fail:
-            raise RuntimeError("Chroma unavailable")
-        return dict(self.counts)
+    async def stream_chat(
+        self,
+        *,
+        model: str,
+        messages: list[dict[str, str]],
+        options: dict[str, Any] | None = None,
+        keep_alive: str | None = None,
+    ) -> AsyncIterator[dict[str, Any]]:
+        del model, messages, options, keep_alive
+        async for token in self.stream(""):
+            yield {"message": {"content": token}}
 
-    def add_documents(self, document_id: str, docs) -> None:
-        self.added.append((document_id, len(docs)))
+    async def list_installed_models(self) -> list[dict[str, Any]]:
+        return [{"name": self.model}]
 
-    def delete_document(self, document_id: str) -> None:
-        self.deleted.append(document_id)
+    async def list_running_models(self) -> list[dict[str, Any]]:
+        return []
 
-    def get_last_lexical_cache_stats(self) -> dict[str, object]:
-        return {"cache_hit": False}
+    async def preload_model(
+        self,
+        *,
+        model: str,
+        keep_alive: str | None = None,
+    ) -> dict[str, Any]:
+        del keep_alive
+        return {"status": "ok", "model": model}
+
+    async def unload_model(self, *, model: str) -> dict[str, Any]:
+        return {"status": "ok", "model": model}
+
+    async def runtime_status(self) -> dict[str, Any]:
+        return {
+            "reachable": not self.fail,
+            "provider": self.provider_name,
+            "active_model": self.model,
+            "installed_models_count": 1,
+            "running_models_count": 0,
+        }
+
+    def is_reachable(self, timeout: float | None = None) -> bool:
+        del timeout
+        return not self.fail
+
+    def list_installed_model_names(self, timeout: float | None = None) -> list[str]:
+        del timeout
+        return [self.model]
+
+    def list_installed_model_details(
+        self, timeout: float | None = None
+    ) -> list[dict[str, Any]]:
+        del timeout
+        return [{"name": self.model, "family": "test", "size": 1, "modified_at": "now"}]
+
+    def list_running_models_status(
+        self, timeout: float | None = None
+    ) -> dict[str, Any]:
+        del timeout
+        return {"detection": "available", "models": []}
+
+    def preload_model_sync(self, model: str) -> None:
+        del model
+
+    def unload_model_sync(self, model: str) -> None:
+        del model
+
+    def provider_info(self) -> dict[str, Any]:
+        return {
+            "name": self.provider_name,
+            "display_name": self.display_name,
+            "capabilities": self.capabilities.to_dict(),
+        }
+
+
+FakeOllamaService = FakeLLMProvider
+
+
+def wrap_ollama_runtime(runtime) -> OllamaProvider:
+    return OllamaProvider(runtime)

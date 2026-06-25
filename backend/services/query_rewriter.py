@@ -5,7 +5,9 @@ from typing import Any, Awaitable, Callable, Optional
 
 from core.observability import build_query_rewriting_debug, elapsed_ms
 from prompts.query_rewrite_prompt import build_query_rewrite_prompt
-from services.ollama_service import OllamaService
+from services.llm_provider import LLMProvider
+from services.providers.ollama_provider import OllamaProvider
+from services.providers.llama_cpp_provider import LlamaCppProvider
 
 FOLLOW_UP_PATTERN = re.compile(
     r"\b("
@@ -112,14 +114,14 @@ class QueryRewriter:
         *,
         enabled: bool,
         history_turns: int,
-        ollama_service: Optional[OllamaService] = None,
+        llm_provider: Optional[LLMProvider] = None,
         rewrite_model: Optional[str] = None,
         rewrite_model_resolver: Optional[Callable[[], str]] = None,
         generate_fn: Optional[Callable[[str], Awaitable[str]]] = None,
     ) -> None:
         self.enabled = enabled
         self.history_turns = history_turns
-        self._ollama_service = ollama_service
+        self._llm_provider = llm_provider
         self._rewrite_model = rewrite_model
         self._rewrite_model_resolver = rewrite_model_resolver
         self._generate_fn = generate_fn
@@ -189,15 +191,16 @@ class QueryRewriter:
         if self._generate_fn is not None:
             return await self._generate_fn(prompt)
 
-        if self._ollama_service is None:
-            raise RuntimeError("Query rewriting requires an Ollama service or test generate_fn.")
+        if self._llm_provider is None:
+            raise RuntimeError("Query rewriting requires an LLM provider or test generate_fn.")
 
         rewrite_model = self._resolve_rewrite_model()
-        if rewrite_model and rewrite_model != self._ollama_service.model:
-            rewrite_client = OllamaService(
-                base_url=self._ollama_service.base_url,
-                model=rewrite_model,
+        if rewrite_model and rewrite_model != self._llm_provider.model:
+            if isinstance(self._llm_provider, (OllamaProvider, LlamaCppProvider)):
+                rewrite_provider = self._llm_provider.with_model(rewrite_model)
+                return await rewrite_provider.generate(prompt)
+            raise RuntimeError(
+                "Dedicated rewrite model requires a local provider with model override support."
             )
-            return await rewrite_client.generate(prompt)
 
-        return await self._ollama_service.generate(prompt)
+        return await self._llm_provider.generate(prompt)

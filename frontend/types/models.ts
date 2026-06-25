@@ -184,6 +184,20 @@ export type UpdateModelSettingsInput = {
 
 export type ModelRuntimeStatus = {
   status: 'ok' | 'degraded';
+  provider?: {
+    name: string;
+    display_name: string;
+    capabilities: {
+      chat: boolean;
+      streaming: boolean;
+      list_installed_models: boolean;
+      list_running_models: boolean;
+      preload: boolean;
+      unload: boolean;
+      keep_alive: boolean;
+      openai_compatible: boolean;
+    };
+  };
   ollama: {
     reachable: boolean;
     status: 'ok' | 'unavailable' | 'error' | 'degraded';
@@ -228,6 +242,38 @@ export type ModelRuntimeStatus = {
     running_models_count?: number;
     loaded_detection?: 'available' | 'unsupported' | 'unavailable';
     cold_start_likely?: boolean | null;
+  };
+  embeddings?: {
+    provider: string;
+    model: string;
+    dimension: number;
+    quality: string;
+    zero_ollama_compatible: boolean;
+    local_files_only?: boolean;
+    device?: string;
+    status?: string;
+    message?: string | null;
+    setup_command?: string;
+    check_command?: string;
+    collection?: {
+      strategy?: string;
+      active_collection?: string;
+      status?: string;
+      reindex_recommended?: boolean;
+      total_chunks?: number;
+      matching_chunks?: number;
+      mismatched_provider_chunks?: number;
+      mismatched_model_chunks?: number;
+      mismatched_dimension_chunks?: number;
+      legacy_chunks?: number;
+      message?: string | null;
+    };
+    reindex?: {
+      recommended?: boolean;
+      dry_run_command?: string;
+      run_command?: string;
+      message?: string | null;
+    };
   };
 };
 

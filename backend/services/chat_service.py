@@ -15,7 +15,7 @@ from retrieval.formatter import format_retrieved_chunks, serialize_sources
 from retrieval.reranker import HeuristicReranker
 from retrieval.retriever import Retriever
 from services.chroma_service import ChromaService
-from services.ollama_service import OllamaService
+from services.llm_provider import LLMProvider
 from services.query_rewriter import QueryRewriter, QueryRewriteOutcome
 from services.metrics import get_local_metrics
 
@@ -24,7 +24,7 @@ class ChatService:
     def __init__(
         self,
         chroma_service: ChromaService,
-        ollama_service: OllamaService,
+        llm_provider: LLMProvider,
         top_k: int = 5,
         max_context_chunks: int = 5,
         enable_hybrid: bool = False,
@@ -35,7 +35,7 @@ class ChatService:
         answer_mode: str = "strict_rag",
     ) -> None:
         self.chroma_service = chroma_service
-        self.ollama_service = ollama_service
+        self.llm_provider = llm_provider
         self.query_rewriter = query_rewriter
         self.answer_mode = answer_mode
         self.max_context_chunks = max_context_chunks
@@ -93,6 +93,9 @@ class ChatService:
             "query": retrieval_query,
             "results": [build_chunk_debug(doc) for doc in retrieved_docs],
         }
+        embedding_filter_stats = self.chroma_service.get_last_embedding_filter_stats()
+        if isinstance(embedding_filter_stats, dict) and embedding_filter_stats:
+            retrieval_debug["embeddings"] = embedding_filter_stats
 
         rewriting_debug = query_rewriting_debug or build_query_rewriting_debug(
             enabled=False,
@@ -235,14 +238,14 @@ class ChatService:
         )
 
         generation_started = perf_counter()
-        answer = await self.ollama_service.generate(prepared["prompt"])
+        answer = await self.llm_provider.generate(prepared["prompt"])
         generation_finished = perf_counter()
 
         generation_debug = build_generation_debug(
-            model=self.ollama_service.model,
+            model=self.llm_provider.model,
             output_text=answer,
             latency_ms=elapsed_ms(generation_started, generation_finished),
-            keep_alive=self.ollama_service.keep_alive,
+            keep_alive=self.llm_provider.keep_alive,
         )
         log_structured("rag.generation", prepared["trace_id"], generation_debug)
 

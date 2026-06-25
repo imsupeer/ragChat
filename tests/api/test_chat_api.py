@@ -24,10 +24,10 @@ class FakeOllamaService:
 
 
 class FakeChatService:
-    def __init__(self, ollama_service=None) -> None:
+    def __init__(self, llm_provider=None, ollama_service=None) -> None:
         self.ask_calls = []
         self.prepare_calls = []
-        self.ollama_service = ollama_service or FakeOllamaService()
+        self.llm_provider = llm_provider or ollama_service or FakeOllamaService()
 
     async def ask(self, question: str, document_ids=None, chat_history=None, retrieval_question=None, query_rewriting_debug=None):
         self.ask_calls.append(

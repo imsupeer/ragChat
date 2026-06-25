@@ -2,9 +2,10 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from core.config import Settings, get_settings
-from core.dependencies import get_local_metrics_service, get_reconciliation_service
+from core.dependencies import get_local_metrics_service, get_model_runtime_service, get_reconciliation_service
 from core.observability import safe_reconciliation_error_message
 from services.metrics import LocalMetrics
+from services.model_runtime import ModelRuntimeService
 from services.reconciliation import PersistenceReconciliationService
 
 router = APIRouter(prefix="/debug", tags=["debug"])
@@ -61,3 +62,10 @@ def get_metrics_snapshot(
     metrics: LocalMetrics = Depends(get_local_metrics_service),
 ):
     return metrics.snapshot()
+
+
+@router.get("/embeddings")
+def get_embeddings_diagnostics(
+    runtime: ModelRuntimeService = Depends(get_model_runtime_service),
+):
+    return runtime.get_embeddings_diagnostics()

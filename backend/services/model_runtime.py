@@ -11,7 +11,13 @@ from services.model_names import (
     resolve_installed_match,
 )
 from services.model_settings import ModelSettingsService
-from services.ollama_service import OllamaService
+from services.llm_provider import LLMProvider, LLMProviderUnsupportedOperationError
+from services.embeddings_provider import EmbeddingsProvider
+from services.embedding_collection_diagnostics import build_embedding_collection_diagnostics
+from services.document_reindex import build_reindex_guidance
+from services.chroma_service import ChromaService
+from services.document_registry import DocumentRegistry
+from services.llama_cpp_runtime_files import get_local_runtime_status
 
 
 class ModelRuntimeError(Exception):
@@ -24,15 +30,29 @@ class ModelRuntimeService:
     def __init__(
         self,
         *,
-        ollama_service: OllamaService,
+        llm_provider: LLMProvider,
         model_settings: ModelSettingsService,
         keep_alive: str,
         catalog_loader: Callable[[], list[dict[str, Any]]] | None = None,
+        llama_cpp_manifest_path: str | None = None,
+        llama_cpp_models_dir: str | None = None,
+        llama_cpp_binary_dir: str | None = None,
+        llama_cpp_server_bin: str | None = None,
+        embeddings_provider: EmbeddingsProvider | None = None,
+        chroma_service: ChromaService | None = None,
+        document_registry: DocumentRegistry | None = None,
     ) -> None:
-        self._ollama = ollama_service
+        self._provider = llm_provider
         self._model_settings = model_settings
         self._keep_alive = keep_alive
         self._catalog_loader = catalog_loader or load_model_catalog
+        self._llama_cpp_manifest_path = llama_cpp_manifest_path
+        self._llama_cpp_models_dir = llama_cpp_models_dir
+        self._llama_cpp_binary_dir = llama_cpp_binary_dir
+        self._llama_cpp_server_bin = llama_cpp_server_bin
+        self._embeddings_provider = embeddings_provider
+        self._chroma_service = chroma_service
+        self._document_registry = document_registry
 
     def _catalog_entry_for(self, active_name: str) -> dict[str, Any] | None:
         for entry in self._catalog_loader():
@@ -126,10 +146,12 @@ class ModelRuntimeService:
         if detection == "available" and active_model.get("installed") is True:
             cold_start_likely = active_model.get("loaded") is False
 
+        capabilities = self._provider.capabilities
+        keep_alive_value = self._keep_alive if capabilities.keep_alive else ""
         return {
-            "keep_alive": self._keep_alive,
-            "preload_supported": True,
-            "unload_supported": True,
+            "keep_alive": keep_alive_value,
+            "preload_supported": capabilities.preload,
+            "unload_supported": capabilities.unload,
             "installed_models_count": installed_count,
             "running_models_count": running_count,
             "loaded_detection": detection,
@@ -137,25 +159,40 @@ class ModelRuntimeService:
         }
 
     def get_runtime_status(self) -> dict[str, Any]:
-        reachable = self._ollama.is_reachable()
+        reachable = self._provider.is_reachable()
         installed_details: list[dict[str, Any]] = []
         installed_names: list[str] | None = None
         running_result: dict[str, Any] = {"detection": "unavailable", "models": []}
 
         if reachable:
-            installed_details = self._ollama.list_installed_model_details()
+            installed_details = self._provider.list_installed_model_details()
             installed_names = [item["name"] for item in installed_details]
-            running_result = self._ollama.list_running_models()
+            running_result = self._provider.list_running_models_status()
 
         active_model = self._active_model_state(installed_names, running_result)
-        ollama_status = "ok" if reachable else "unavailable"
-        ollama_message = None if reachable else "Ollama is unreachable on the configured local URL."
+        provider_name = self._provider.provider_name
+        runtime_reachable = reachable
+        runtime_status = "ok" if runtime_reachable else "unavailable"
+        runtime_message = None
+        if not runtime_reachable:
+            if provider_name == "llama_cpp":
+                runtime_message = (
+                    "llama.cpp server is unreachable on the configured local URL."
+                )
+            else:
+                runtime_message = "Ollama is unreachable on the configured local URL."
 
-        if reachable and active_model["installed"] is False:
-            ollama_status = "degraded"
-            ollama_message = (
-                f"Active chat model `{active_model['name']}` is not installed locally."
-            )
+        if runtime_reachable and active_model["installed"] is False:
+            runtime_status = "degraded"
+            if provider_name == "llama_cpp":
+                runtime_message = (
+                    f"Active chat model `{active_model['name']}` is not reported by the "
+                    "llama.cpp server."
+                )
+            else:
+                runtime_message = (
+                    f"Active chat model `{active_model['name']}` is not installed locally."
+                )
 
         runtime_block = self._runtime_block(
             installed_count=len(installed_details),
@@ -165,10 +202,11 @@ class ModelRuntimeService:
 
         return {
             "status": "ok" if reachable else "degraded",
+            "provider": self._provider.provider_info(),
             "ollama": {
-                "reachable": reachable,
-                "status": ollama_status,
-                "message": ollama_message,
+                "reachable": runtime_reachable,
+                "status": runtime_status,
+                "message": runtime_message,
             },
             "active_model": active_model,
             "installed_models": installed_details,
@@ -181,36 +219,162 @@ class ModelRuntimeService:
                 "query_rewrite": self._model_settings.query_rewrite_policy(active_model["name"]),
             },
             "runtime": runtime_block,
+            **self._local_runtime_block(),
+            **self._embeddings_block(),
+        }
+
+    def _embeddings_block(self) -> dict[str, Any]:
+        if self._embeddings_provider is None:
+            return {}
+        info = dict(self._embeddings_provider.provider_info())
+        collection_status: dict[str, object] = {}
+        if self._chroma_service is not None and hasattr(
+            self._chroma_service, "get_collection_status"
+        ):
+            collection_status = self._chroma_service.get_collection_status()
+        if self._chroma_service is not None:
+            diagnostics = build_embedding_collection_diagnostics(
+                self._chroma_service,
+                provider=str(info["provider"]),
+                model=str(info["model"]),
+                dimension=int(info["dimension"]),
+            )
+            collection = diagnostics.get("collection", {})
+            info["collection"] = {
+                "strategy": collection_status.get("strategy"),
+                "active_collection": collection_status.get("active_collection"),
+                "status": diagnostics.get("status"),
+                "reindex_recommended": diagnostics.get("reindex_recommended", False),
+                "total_chunks": collection.get("total_chunks", 0),
+                "matching_chunks": collection.get("matching_chunks", 0),
+                "mismatched_provider_chunks": collection.get("mismatched_provider_chunks", 0),
+                "mismatched_model_chunks": collection.get("mismatched_model_chunks", 0),
+                "mismatched_dimension_chunks": collection.get("mismatched_dimension_chunks", 0),
+                "legacy_chunks": collection.get("legacy_chunks", 0),
+                "message": diagnostics.get("message"),
+            }
+            info["reindex"] = self._reindex_guidance_block(diagnostics)
+        return {"embeddings": info}
+
+    def _reindex_guidance_block(self, diagnostics: dict[str, Any]) -> dict[str, Any]:
+        registered_count = 0
+        if self._document_registry is not None:
+            registered_count = len(self._document_registry.list_all())
+        return build_reindex_guidance(
+            collection_status=str(diagnostics.get("status") or "unknown"),
+            reindex_recommended=bool(diagnostics.get("reindex_recommended")),
+            registered_document_count=registered_count,
+        )
+
+    def get_embeddings_diagnostics(self) -> dict[str, Any]:
+        if self._embeddings_provider is None:
+            return {"status": "unknown", "message": "Embeddings provider unavailable."}
+        info = dict(self._embeddings_provider.provider_info())
+        if self._chroma_service is None:
+            return {
+                "status": "unknown",
+                "message": "Chroma diagnostics unavailable.",
+                "provider": info,
+            }
+        diagnostics = build_embedding_collection_diagnostics(
+            self._chroma_service,
+            provider=str(info["provider"]),
+            model=str(info["model"]),
+            dimension=int(info["dimension"]),
+        )
+        chroma_status = (
+            self._chroma_service.get_collection_status()
+            if hasattr(self._chroma_service, "get_collection_status")
+            else {}
+        )
+        reindex = self._reindex_guidance_block(diagnostics)
+        return {
+            "provider": info,
+            "collection": diagnostics,
+            "chroma": chroma_status,
+            "reindex": reindex,
+            "reindex_guidance": reindex.get("message")
+            or (
+                "After changing EMBEDDINGS_PROVIDER, re-upload or reindex documents "
+                "before evaluating retrieval quality."
+            ),
+        }
+
+    def _local_runtime_block(self) -> dict[str, Any]:
+        if self._provider.provider_name != "llama_cpp":
+            return {}
+        if not all(
+            [
+                self._llama_cpp_manifest_path,
+                self._llama_cpp_models_dir,
+                self._llama_cpp_binary_dir,
+            ]
+        ):
+            return {}
+        return {
+            "local_runtime": get_local_runtime_status(
+                manifest_path=self._llama_cpp_manifest_path,
+                models_dir=self._llama_cpp_models_dir,
+                binary_dir=self._llama_cpp_binary_dir,
+                explicit_binary=self._llama_cpp_server_bin or None,
+            )
         }
 
     def preload_active_model(self) -> dict[str, Any]:
-        if not self._ollama.is_reachable():
-            raise ModelRuntimeError("Ollama is unavailable. Start Ollama before preloading a model.")
+        if not self._provider.is_reachable():
+            provider_label = self._provider.display_name
+            raise ModelRuntimeError(
+                f"{provider_label} is unavailable. Start the local runtime before preloading a model."
+            )
 
         active_model = self._model_settings.get_active_chat_model()
-        installed = self._ollama.list_installed_models()
-        if not any(model_matches_installed(active_model, name) for name in installed):
+        installed = self._provider.list_installed_model_names()
+        if installed and not any(
+            model_matches_installed(active_model, name) for name in installed
+        ):
+            if self._provider.provider_name == "llama_cpp":
+                raise ModelRuntimeError(
+                    f"Model `{active_model['name']}` is not reported by the llama.cpp server."
+                )
             raise ModelRuntimeError(
                 f"Model is not installed locally. Install it with `ollama pull {active_model}`.",
                 install_command=f"ollama pull {active_model}",
             )
 
-        self._ollama.preload_model(active_model)
+        self._provider.preload_model_sync(active_model)
         refreshed = self.get_runtime_status()
+        if self._provider.provider_name == "llama_cpp":
+            message = (
+                "llama.cpp server is reachable; model is managed by the server process."
+            )
+        else:
+            message = "Model preload request completed."
         return {
             "status": "ok",
             "model": active_model,
-            "message": "Model preload request completed.",
-            "keep_alive": self._keep_alive,
+            "message": message,
+            "keep_alive": self._keep_alive if self._provider.capabilities.keep_alive else None,
             "runtime": refreshed,
         }
 
     def unload_active_model(self) -> dict[str, Any]:
-        if not self._ollama.is_reachable():
-            raise ModelRuntimeError("Ollama is unavailable. Start Ollama before unloading a model.")
+        if not self._provider.capabilities.unload:
+            raise ModelRuntimeError(
+                "Unload is not supported for the llama.cpp provider. "
+                "The model is managed by the llama-server process."
+            )
+
+        if not self._provider.is_reachable():
+            provider_label = self._provider.display_name
+            raise ModelRuntimeError(
+                f"{provider_label} is unavailable. Start the local runtime before unloading a model."
+            )
 
         active_model = self._model_settings.get_active_chat_model()
-        self._ollama.unload_model(active_model)
+        try:
+            self._provider.unload_model_sync(active_model)
+        except LLMProviderUnsupportedOperationError as exc:
+            raise ModelRuntimeError(str(exc)) from exc
         refreshed = self.get_runtime_status()
         return {
             "status": "ok",
@@ -244,11 +408,12 @@ class ModelRuntimeService:
         check: dict[str, Any] = {
             "status": status["ollama"]["status"],
             "reachable": status["ollama"]["reachable"],
+            "provider": status["provider"]["name"],
             "active_chat_model": active["name"],
             "active_model_installed": installed_label,
             "active_model_loaded": loaded_label,
             "loaded_detection": runtime.get("loaded_detection", "unavailable"),
-            "keep_alive": self._keep_alive,
+            "keep_alive": self._keep_alive if self._provider.capabilities.keep_alive else "",
             "installed_models_count": status["installed_models_count"],
             "running_models_count": runtime.get("running_models_count", 0),
         }

@@ -27,6 +27,24 @@ def test_document_registry_add_and_remove(tmp_path: Path):
     assert json.loads(registry_path.read_text(encoding="utf-8")) == []
 
 
+def test_document_registry_update(tmp_path: Path):
+    registry_path = tmp_path / "registry.json"
+    registry = DocumentRegistry(str(registry_path))
+    registry.add(
+        {
+            "id": "doc-1",
+            "filename": "sample.txt",
+            "stored_path": "sample.txt",
+            "total_chunks": 1,
+        }
+    )
+
+    updated = registry.update("doc-1", {"total_chunks": 4})
+
+    assert updated["total_chunks"] == 4
+    assert registry.get("doc-1")["total_chunks"] == 4
+
+
 def test_document_registry_atomic_write_preserves_prior_file_on_replace_failure(
     tmp_path: Path, monkeypatch
 ):

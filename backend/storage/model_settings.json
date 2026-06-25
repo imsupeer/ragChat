@@ -1,8 +1,8 @@
 {
-  "chat_model": "llama3.2:1b",
-  "default_chat_model": "llama3.2:1b",
-  "query_rewrite_model": "llama3.2:1b",
+  "chat_model": "/models/model.gguf",
+  "default_chat_model": "model.gguf",
+  "query_rewrite_model": null,
   "use_chat_model_for_query_rewrite": false,
-  "source": "default",
-  "updated_at": "2026-06-24T13:17:55+00:00"
+  "source": "user",
+  "updated_at": "2026-06-25T21:48:30+00:00"
 }

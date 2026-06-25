@@ -113,6 +113,12 @@ class PersistenceReconciliationService:
         recoverable_jobs = self.sqlite_store.list_recoverable_upload_jobs()
         filesystem_files = self._list_filesystem_files()
         chroma_counts = self.chroma_service.list_document_ids_with_vector_counts()
+        chroma_collections: dict[str, dict[str, int]] = {}
+        active_collection = None
+        if hasattr(self.chroma_service, "summarize_collections"):
+            chroma_collections = self.chroma_service.summarize_collections()
+        if hasattr(self.chroma_service, "collection_name"):
+            active_collection = self.chroma_service.collection_name
 
         registry_by_id = {entry["id"]: entry for entry in registry_entries}
         registry_paths = {
@@ -254,6 +260,8 @@ class PersistenceReconciliationService:
                 "registry_documents": len(registry_entries),
                 "filesystem_files": len(filesystem_files),
                 "chroma_documents": len(chroma_counts),
+                "chroma_collections": chroma_collections,
+                "active_chroma_collection": active_collection,
                 "upload_jobs": len(upload_jobs),
                 "issues": len(issues),
             },

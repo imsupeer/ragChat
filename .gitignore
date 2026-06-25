@@ -55,6 +55,21 @@ frontend/playwright-report/
 frontend/blob-report/
 
 
+models/**/*.gguf
+models/**/*.bin
+models/**/*.safetensors
+!models/README.md
+!models/demo/.gitkeep
+!models/demo/model-manifest.json
+
+runtime/bin/*
+!runtime/bin/.gitkeep
+runtime/logs/*
+!runtime/logs/.gitkeep
+runtime/llama.cpp/*
+!runtime/llama.cpp/README.md
+
+
 *.log
 logs/
 *.pid

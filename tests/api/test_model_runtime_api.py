@@ -11,7 +11,11 @@ from services.metrics import LocalMetrics
 from services.model_catalog import load_model_catalog
 from services.model_runtime import ModelRuntimeError, ModelRuntimeService
 from services.model_settings import ModelSettingsService
-from services.ollama_service import OllamaService
+from services.providers.local_hash_embeddings_provider import LocalHashEmbeddingsProvider
+from services.providers.ollama_provider import OllamaProvider
+from services.providers.sentence_transformers_embeddings_provider import (
+    SentenceTransformersEmbeddingsProvider,
+)
 from tests.services.test_model_runtime import FakeOllamaRuntime
 
 
@@ -32,7 +36,7 @@ def runtime_service(tmp_path: Path) -> ModelRuntimeService:
         catalog_loader=load_model_catalog,
     )
     return ModelRuntimeService(
-        ollama_service=FakeOllamaRuntime(),
+        llm_provider=OllamaProvider(FakeOllamaRuntime()),
         model_settings=settings,
         keep_alive="5m",
     )
@@ -45,10 +49,82 @@ def test_get_model_runtime_returns_status(runtime_service: ModelRuntimeService):
     assert response.status_code == 200
     payload = response.json()
     assert payload["ollama"]["reachable"] is True
+    assert payload["provider"]["name"] == "ollama"
+    assert payload["provider"]["display_name"] == "Ollama"
     assert payload["runtime"]["keep_alive"] == "5m"
     assert "loaded_detection" in payload["runtime"]
     assert "running_models" in payload
     assert "loaded" in payload["active_model"]
+    assert "local_runtime" not in payload
+
+
+def test_get_model_runtime_includes_embeddings_provider(runtime_service: ModelRuntimeService):
+    class FakeChroma:
+        def list_chunk_metadatas(self):
+            return [
+                {
+                    "embedding_provider": "local_hash",
+                    "embedding_model": "local-hash-v1",
+                    "embedding_dimension": 384,
+                }
+            ]
+
+        def get_collection_status(self):
+            return {
+                "strategy": "per_embedding_provider",
+                "active_collection": "rag_local_hash_local_hash_v1_384",
+            }
+
+    class FakeRegistry:
+        def list_all(self):
+            return []
+
+    runtime = ModelRuntimeService(
+        llm_provider=runtime_service._provider,
+        model_settings=runtime_service._model_settings,
+        keep_alive="5m",
+        embeddings_provider=LocalHashEmbeddingsProvider(),
+        chroma_service=FakeChroma(),
+        document_registry=FakeRegistry(),
+    )
+    with build_runtime_client(runtime) as client:
+        response = client.get("/models/runtime")
+
+    payload = response.json()
+    assert payload["embeddings"]["provider"] == "local_hash"
+    assert payload["embeddings"]["quality"] == "demo"
+    assert payload["embeddings"]["collection"]["status"] == "ok"
+    assert payload["embeddings"]["collection"]["reindex_recommended"] is False
+    assert payload["embeddings"]["collection"]["strategy"] == "per_embedding_provider"
+    assert (
+        payload["embeddings"]["collection"]["active_collection"]
+        == "rag_local_hash_local_hash_v1_384"
+    )
+    assert payload["embeddings"]["reindex"]["recommended"] is False
+
+
+def test_get_model_runtime_includes_sentence_transformers_embeddings(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        "services.sentence_transformers_runtime.import_sentence_transformer_class",
+        lambda: None,
+    )
+    runtime = ModelRuntimeService(
+        llm_provider=OllamaProvider(FakeOllamaRuntime()),
+        model_settings=ModelSettingsService(
+            settings_path=str(tmp_path / "model_settings.json"),
+            default_chat_model="llama3.1:8b",
+            installed_models_provider=lambda: ["llama3.1:8b"],
+            catalog_loader=load_model_catalog,
+        ),
+        keep_alive="5m",
+        embeddings_provider=SentenceTransformersEmbeddingsProvider(),
+    )
+    with build_runtime_client(runtime) as client:
+        response = client.get("/models/runtime")
+
+    payload = response.json()
+    assert payload["embeddings"]["provider"] == "sentence_transformers"
+    assert payload["embeddings"]["status"] == "missing_dependency"
 
 
 def test_post_model_runtime_preload_success(runtime_service: ModelRuntimeService):
@@ -71,7 +147,7 @@ def test_post_model_runtime_preload_not_installed(tmp_path: Path):
     )
     settings.update_chat_model("mistral:7b", require_installed=False)
     runtime = ModelRuntimeService(
-        ollama_service=FakeOllamaRuntime(installed=["llama3.1:8b"]),
+        llm_provider=OllamaProvider(FakeOllamaRuntime(installed=["llama3.1:8b"])),
         model_settings=settings,
         keep_alive="5m",
     )
@@ -132,6 +208,9 @@ def test_chat_generation_passes_keep_alive(tmp_path: Path):
     from langchain_core.documents import Document
     import asyncio
 
+    from services.ollama_service import OllamaService
+    from services.providers.ollama_provider import OllamaProvider
+
     class TrackingOllama(OllamaService):
         def __init__(self) -> None:
             super().__init__(
@@ -147,7 +226,12 @@ def test_chat_generation_passes_keep_alive(tmp_path: Path):
 
     ollama = TrackingOllama()
     chroma = MagicMock()
-    chat = ChatService(chroma_service=chroma, ollama_service=ollama, top_k=3, max_context_chunks=3)
+    chat = ChatService(
+        chroma_service=chroma,
+        llm_provider=OllamaProvider(ollama),
+        top_k=3,
+        max_context_chunks=3,
+    )
     chat.retriever = MagicMock()
     chat.retriever.top_k = 3
     chat.retriever.enable_hybrid = False

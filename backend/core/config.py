@@ -4,6 +4,8 @@ from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from prompts.rag_prompt import ANSWER_MODES
+from services.llm_provider import IMPLEMENTED_LLM_PROVIDERS, PLANNED_LLM_PROVIDERS
+from services.embeddings_provider import IMPLEMENTED_EMBEDDINGS_PROVIDERS
 
 DEFAULT_MAX_UPLOAD_BYTES = 52_428_800
 DEFAULT_UPLOAD_READ_CHUNK_BYTES = 1_048_576
@@ -16,13 +18,40 @@ class Settings(BaseSettings):
     api_port: int = 8000
     cors_origins: str = "http://localhost:3000"
 
+    llm_provider: str = "ollama"
+
     ollama_base_url: str = "http://localhost:11434"
     ollama_chat_model: str = "llama3.1:8b"
     ollama_embed_model: str = "mxbai-embed-large"
+    ollama_embed_dimension: int = 1024
+
+    embeddings_provider: str = "ollama"
+    local_hash_embeddings_dimension: int = 384
+    local_hash_embeddings_normalize: bool = True
+
+    sentence_transformers_model: str = "sentence-transformers/all-MiniLM-L6-v2"
+    sentence_transformers_dimension: int = 384
+    sentence_transformers_device: str = "cpu"
+    sentence_transformers_cache_dir: str = ""
+    sentence_transformers_local_files_only: bool = True
+
     ollama_keep_alive: str = "5m"
     ollama_preload_timeout_seconds: float = 30.0
     ollama_tags_timeout_seconds: float = 2.0
     ollama_ps_timeout_seconds: float = 2.0
+
+    llama_cpp_base_url: str = "http://localhost:11435"
+    llama_cpp_model_path: str = ""
+    llama_cpp_chat_model: str = "demo-model.gguf"
+    llama_cpp_timeout_seconds: float = 60.0
+    llama_cpp_stream_timeout_seconds: float = 120.0
+    llama_cpp_runtime_timeout_seconds: float = 2.0
+    llama_cpp_manifest_path: str = "./models/demo/model-manifest.json"
+    llama_cpp_models_dir: str = "./models/demo"
+    llama_cpp_binary_dir: str = "./runtime/bin"
+    llama_cpp_server_bin: str = ""
+    llama_cpp_pid_file: str = "./runtime/llama.cpp/llama-server.pid"
+    llama_cpp_log_file: str = "./runtime/logs/llama-server.log"
 
     hardware_telemetry_enabled: bool = True
     hardware_telemetry_timeout_seconds: float = 2.0
@@ -30,6 +59,10 @@ class Settings(BaseSettings):
     hardware_telemetry_gpu_provider: str = "auto"
 
     chroma_persist_directory: str = "./vector_db"
+    chroma_collection_strategy: str = "per_embedding_provider"
+    chroma_default_collection: str = "rag_chat"
+    chroma_collection_prefix: str = "rag"
+
     documents_directory: str = "./storage/docs"
     registry_path: str = "./storage/registry.json"
     sqlite_path: str = "./storage/app.db"
@@ -66,6 +99,66 @@ class Settings(BaseSettings):
         case_sensitive=False,
         protected_namespaces=("settings_",),
     )
+
+    @field_validator("llm_provider")
+    @classmethod
+    def validate_llm_provider(cls, value: str) -> str:
+        normalized = (value or "ollama").strip().lower()
+        allowed = IMPLEMENTED_LLM_PROVIDERS | PLANNED_LLM_PROVIDERS
+        if normalized not in allowed:
+            implemented = ", ".join(sorted(IMPLEMENTED_LLM_PROVIDERS))
+            raise ValueError(
+                f"LLM_PROVIDER must be one of the known provider keys. "
+                f"Implemented: {implemented}"
+            )
+        if normalized not in IMPLEMENTED_LLM_PROVIDERS:
+            raise ValueError(
+                f"LLM provider '{normalized}' is not implemented yet. "
+                f"Implemented providers: {', '.join(sorted(IMPLEMENTED_LLM_PROVIDERS))}"
+            )
+        return normalized
+
+    @field_validator("embeddings_provider")
+    @classmethod
+    def validate_embeddings_provider(cls, value: str) -> str:
+        normalized = (value or "ollama").strip().lower()
+        if normalized not in IMPLEMENTED_EMBEDDINGS_PROVIDERS:
+            allowed = ", ".join(sorted(IMPLEMENTED_EMBEDDINGS_PROVIDERS))
+            raise ValueError(
+                f"EMBEDDINGS_PROVIDER must be one of the implemented providers: {allowed}"
+            )
+        return normalized
+
+    @field_validator("chroma_collection_strategy")
+    @classmethod
+    def validate_chroma_collection_strategy(cls, value: str) -> str:
+        from retrieval.collection_identity import CHROMA_COLLECTION_STRATEGIES
+
+        normalized = (value or "per_embedding_provider").strip().lower()
+        if normalized not in CHROMA_COLLECTION_STRATEGIES:
+            allowed = ", ".join(sorted(CHROMA_COLLECTION_STRATEGIES))
+            raise ValueError(
+                f"CHROMA_COLLECTION_STRATEGY must be one of: {allowed}"
+            )
+        return normalized
+
+    @field_validator("local_hash_embeddings_dimension", "ollama_embed_dimension", "sentence_transformers_dimension")
+    @classmethod
+    def validate_positive_embedding_dimension(cls, value: int) -> int:
+        if value <= 0:
+            raise ValueError("Embedding dimension settings must be positive.")
+        return value
+
+    @field_validator(
+        "llama_cpp_timeout_seconds",
+        "llama_cpp_stream_timeout_seconds",
+        "llama_cpp_runtime_timeout_seconds",
+    )
+    @classmethod
+    def validate_positive_llama_cpp_timeouts(cls, value: float) -> float:
+        if value <= 0:
+            raise ValueError("llama.cpp timeout settings must be positive.")
+        return value
 
     @field_validator("answer_mode")
     @classmethod

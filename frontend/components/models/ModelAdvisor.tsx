@@ -124,6 +124,23 @@ function activeInstalledLabel(runtime: ModelRuntimeStatus | null) {
   return 'Unknown';
 }
 
+function embeddingIndexLabel(status: string | undefined): string {
+  switch (status) {
+    case 'ok':
+      return 'OK';
+    case 'mixed':
+      return 'Mixed providers — reindex recommended';
+    case 'legacy':
+      return 'Legacy metadata — reindex recommended';
+    case 'empty':
+      return 'Empty';
+    case 'error':
+      return 'Error';
+    default:
+      return 'Unknown';
+  }
+}
+
 function runtimeGuidance(runtime: ModelRuntimeStatus | null, settings: ModelSettingsState | null) {
   if (!runtime) {
     return null;
@@ -401,6 +418,95 @@ export function ModelAdvisor({
             <p className="text-xs text-gray-400">Loading runtime status…</p>
           ) : (
             <div className="space-y-1 text-xs">
+              {runtime?.provider?.display_name ? (
+                <p data-testid="model-runtime-provider">
+                  Provider: <span className="text-white">{runtime.provider.display_name}</span>
+                </p>
+              ) : null}
+              {runtime?.embeddings ? (
+                <p data-testid="model-runtime-embeddings">
+                  Embeddings:{' '}
+                  <span className="text-white">
+                    {runtime.embeddings.provider === 'local_hash'
+                      ? 'Local hash demo'
+                      : runtime.embeddings.provider === 'sentence_transformers'
+                        ? 'Sentence Transformers'
+                        : runtime.embeddings.provider === 'ollama'
+                          ? 'Ollama'
+                          : runtime.embeddings.provider}
+                  </span>
+                  {runtime.embeddings.model ? (
+                    <span className="text-gray-400"> · {runtime.embeddings.model}</span>
+                  ) : null}
+                </p>
+              ) : null}
+              {runtime?.embeddings?.provider === 'local_hash' ? (
+                <p className="text-[11px] leading-5 text-amber-200/90" data-testid="model-runtime-embeddings-warning">
+                  Demo-quality local embeddings. For better semantic retrieval, configure Ollama or a stronger
+                  embedding provider.
+                </p>
+              ) : null}
+              {runtime?.embeddings?.provider === 'sentence_transformers' &&
+              runtime.embeddings.status &&
+              runtime.embeddings.status !== 'ok' ? (
+                <p className="text-[11px] leading-5 text-amber-200/90" data-testid="model-runtime-embeddings-st-warning">
+                  Install/cache the sentence-transformers model, or use local_hash for dependency-free demo mode.
+                  {runtime.embeddings.message ? ` ${runtime.embeddings.message}` : ''}
+                </p>
+              ) : null}
+              {runtime?.embeddings?.collection ? (
+                <p data-testid="model-runtime-embedding-index">
+                  Embedding index:{' '}
+                  <span className="text-white">
+                    {embeddingIndexLabel(runtime.embeddings.collection.status)}
+                  </span>
+                </p>
+              ) : null}
+              {runtime?.embeddings?.collection?.strategy ? (
+                <p data-testid="model-runtime-chroma-strategy">
+                  Chroma strategy:{' '}
+                  <span className="text-white">{runtime.embeddings.collection.strategy}</span>
+                  {runtime.embeddings.collection.active_collection ? (
+                    <span className="text-gray-400">
+                      {' '}
+                      · {runtime.embeddings.collection.active_collection}
+                    </span>
+                  ) : null}
+                </p>
+              ) : null}
+              {runtime?.embeddings?.collection?.strategy === 'per_embedding_provider' ? (
+                <p
+                  className="text-[11px] leading-5 text-gray-500"
+                  data-testid="model-runtime-collection-isolation"
+                >
+                  Vectors are isolated per embeddings provider so switching providers does not
+                  query incompatible vector spaces.
+                </p>
+              ) : null}
+              {runtime?.embeddings?.collection?.reindex_recommended ||
+              runtime?.embeddings?.reindex?.recommended ? (
+                <p
+                  className="text-[11px] leading-5 text-amber-200/90"
+                  data-testid="model-runtime-reindex-warning"
+                >
+                  {runtime.embeddings.reindex?.message ||
+                    'Reindex recommended for the active embeddings provider. Run a dry-run first, then reindex when ready.'}
+                  {runtime.embeddings.collection?.message
+                    ? ` ${runtime.embeddings.collection.message}`
+                    : ''}
+                </p>
+              ) : null}
+              {runtime?.embeddings?.reindex?.recommended ? (
+                <p
+                  className="text-[11px] leading-5 text-gray-500"
+                  data-testid="model-runtime-reindex-command"
+                >
+                  Dry-run:{' '}
+                  <span className="font-mono text-gray-300">
+                    {runtime.embeddings.reindex.dry_run_command}
+                  </span>
+                </p>
+              ) : null}
               <p>
                 Ollama: <span className="text-white">{ollamaStatusLabel(runtime)}</span>
               </p>
@@ -424,8 +530,9 @@ export function ModelAdvisor({
                 </p>
               ) : null}
               <p className="text-[11px] leading-5 text-gray-500">
-                Preload asks Ollama to keep the selected model warm in memory. Unload releases loaded weights; your selected model and on-disk install
-                stay unchanged. Pull/run commands are manual only.
+                {runtime?.provider?.name === 'llama_cpp'
+                  ? 'llama.cpp manages the model through the local server process. Preload checks server reachability; unload is not supported.'
+                  : 'Preload asks Ollama to keep the selected model warm in memory. Unload releases loaded weights; your selected model and on-disk install stay unchanged. Pull/run commands are manual only.'}
               </p>
             </div>
           )}
@@ -444,12 +551,13 @@ export function ModelAdvisor({
               type="button"
               data-testid="model-runtime-preload"
               aria-label="Preload active chat model"
-              disabled={isStreaming || runtimeActionLoading !== null}
+              disabled={isStreaming || runtimeActionLoading !== null || runtime?.runtime.preload_supported === false}
               onClick={() => void handlePreload()}
               className="focus-ring rounded-full border border-emerald-500/40 bg-emerald-500/15 px-3 py-1.5 text-xs text-emerald-100 transition hover:bg-emerald-500/25 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {runtimeActionLoading === 'preload' ? 'Preloading…' : 'Preload active model'}
             </button>
+            {runtime?.runtime.unload_supported !== false ? (
             <button
               type="button"
               data-testid="model-runtime-unload"
@@ -460,6 +568,7 @@ export function ModelAdvisor({
             >
               {runtimeActionLoading === 'unload' ? 'Unloading…' : 'Unload active model'}
             </button>
+            ) : null}
           </div>
         </div>
         {combinedActionMessage ? <p className="text-emerald-300">{combinedActionMessage}</p> : null}

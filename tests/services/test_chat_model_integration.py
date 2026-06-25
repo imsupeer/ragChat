@@ -7,6 +7,7 @@ from services.chat_service import ChatService
 from services.model_catalog import load_model_catalog
 from services.model_settings import ModelSettingsService
 from services.ollama_service import OllamaService
+from services.providers.ollama_provider import OllamaProvider
 from services.query_rewriter import QueryRewriter
 
 
@@ -44,11 +45,12 @@ def build_chat_stack(tmp_path, installed=None):
         model="llama3.1:8b",
         model_resolver=settings_service.get_active_chat_model,
     )
+    provider = OllamaProvider(ollama)
 
     chroma_service = MagicMock()
     chat_service = ChatService(
         chroma_service=chroma_service,
-        ollama_service=ollama,
+        llm_provider=provider,
         top_k=3,
         max_context_chunks=3,
     )
@@ -107,7 +109,7 @@ def test_query_rewrite_model_config_is_independent_of_active_chat_model(tmp_path
     rewriter = QueryRewriter(
         enabled=True,
         history_turns=2,
-        ollama_service=ollama,
+        llm_provider=OllamaProvider(ollama),
         rewrite_model="llama3.1:8b",
     )
 

@@ -1,8 +1,10 @@
 from pathlib import Path
+from pydantic import BaseModel
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from core.config import Settings, get_settings
 from core.dependencies import (
     get_document_delete_service,
+    get_document_reindex_service,
     get_document_registry,
     get_settings,
     get_sqlite_store,
@@ -17,6 +19,7 @@ from services.document_delete import (
     DocumentDeleteService,
     DocumentNotFoundError,
 )
+from services.document_reindex import DocumentReindexService
 from services.document_registry import DocumentRegistry
 from services.sqlite_store import SQLiteStore
 from services.upload_queue import (
@@ -26,6 +29,30 @@ from services.upload_queue import (
 )
 
 router = APIRouter(prefix="/documents", tags=["documents"])
+
+
+class DocumentReindexRequest(BaseModel):
+    dry_run: bool = True
+    document_ids: list[str] | None = None
+    force: bool = False
+
+
+@router.post("/reindex")
+def reindex_documents(
+    request: DocumentReindexRequest | None = None,
+    reindex_service: DocumentReindexService = Depends(get_document_reindex_service),
+):
+    payload = request or DocumentReindexRequest()
+    if payload.dry_run:
+        return reindex_service.build_reindex_plan(
+            document_ids=payload.document_ids,
+            force=payload.force,
+            dry_run=True,
+        )
+    return reindex_service.run_reindex_plan(
+        document_ids=payload.document_ids,
+        force=payload.force,
+    )
 
 
 @router.post("/upload")

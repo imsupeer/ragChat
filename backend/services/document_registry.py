@@ -71,3 +71,16 @@ class DocumentRegistry:
 
             self._write_all_unlocked(remaining)
             return target
+
+    def update(self, document_id: str, updates: Dict) -> Optional[Dict]:
+        with self._lock:
+            data = self._read_all_unlocked()
+            updated = None
+            for item in data:
+                if item["id"] == document_id:
+                    item.update(updates)
+                    updated = dict(item)
+                    break
+            if updated is not None:
+                self._write_all_unlocked(data)
+            return updated

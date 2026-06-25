@@ -222,13 +222,16 @@ def build_chat_service(
         persist_directory=str(chroma_dir),
         embedding_function=embedding_function,
     )
+    from services.ollama_service import OllamaService
+    from services.providers.ollama_provider import OllamaProvider
+
     ollama_service = OllamaService(
         base_url=settings.ollama_base_url,
         model=settings.ollama_chat_model,
     )
     return ChatService(
         chroma_service=chroma_service,
-        ollama_service=ollama_service,
+        llm_provider=OllamaProvider(ollama_service),
         top_k=top_k,
         max_context_chunks=max_context_chunks,
         enable_hybrid=enable_hybrid,
