@@ -59,7 +59,7 @@ def main() -> None:
                     "--skip-generation",
                     "--fake-embeddings",
                     "--report-md",
-                    "tttsss/eval_report.md",
+                    "(folder_example)/eval_report.md",
                 ],
                 "Eval markdown report",
             )

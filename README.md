@@ -555,7 +555,7 @@ Core checks from the repo root (backend venv activated):
 ```bash
 python -m pytest
 python scripts/validate_backend.py --fast
-python scripts/eval.py --skip-generation --fake-embeddings --report-md tttsss/eval_report.md
+python scripts/eval.py --skip-generation --fake-embeddings --report-md (folder_example)/eval_report.md
 cd frontend && npm run build
 cd frontend && npm run test:e2e
 ```
@@ -591,7 +591,7 @@ RUN_LIVE_TESTS=true python -m pytest tests/live/
 - **Fake embeddings + skip-generation** - deterministic offline validation; no Ollama required. Best for portfolio artifacts.
 - **Full eval** - requires Ollama with configured embed and chat models; generation output may vary.
 
-`tttsss/eval_report.md` is a local generated artifact and can be regenerated at any time.
+`(folder_example)/eval_report.md` is a local generated artifact and can be regenerated at any time.
 
 ### E2E prerequisites
 
